@@ -3,10 +3,6 @@
 !*.*
 !*/
 
-**/__pychche__
-*.swp
-*.out
-
 !README
 !Makefile
 !LICENSE
@@ -23,3 +19,7 @@
 !*.png
 !*.md
 !*.txt
+
+**/__pycache__
+*.swp
+*.out
