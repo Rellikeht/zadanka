@@ -1,0 +1,6 @@
+2
+1
+int main() {
+    printf ("Hello\n");
+    return 0;
+}
