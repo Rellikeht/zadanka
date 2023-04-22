@@ -1,5 +1,0 @@
-int main() { // comment
-    printf ("Hello\n"); /* and another */
-    printf ("Greetings\n");
-    return 0;
-}
