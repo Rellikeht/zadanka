@@ -1,14 +1,22 @@
 *
 
+!*.*
+!*/
+
+*.swp
+*.out
+
 !README
 !Makefile
 !LICENSE
 
 !*.py
-!*.nim
 !*.c
-!*.ml
+!*.h
+!*.hpp
 !*.cpp
+!*.ml
+!*.nim
 
 !*.pdf
 !*.png
