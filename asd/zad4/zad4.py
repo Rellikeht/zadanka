@@ -1,58 +1,68 @@
 #!/usr/bin/env python
 from zad4testy import runtests
-from queue import Queue
-
-
-#def shortest_path(G, s, t):
-#    visited = [False for _ in range(len(G))]
-#    vs = Queue()
-#    cp = None
-#    path = []
-#
-#    visited[s] = True
-#    for v in G[s]:
-#        visited[v] = True
-#        vs.put([s, v])
-#
-#    while vs.qsize() > 0:
-#        cp = vs.get()
-#        last = cp[-1]
-#
-#        if last == t:
-#            for i in range(1, len(cp)):
-#                path.append([cp[i-1], cp[i]])
-#            break
-#
-#        for v in G[last]:
-#            if not visited[v]:
-#                np = cp.copy()
-#                visited[v] = True
-#                np.append(v)
-#                vs.put(np)
-#
-#    return path
+from queue import deque
 
 
 def shortest_path(G, s, t):
     visited = [False for _ in range(len(G))]
-    distance = [-1 for _ in range(len(G))]
-    parent = [-1 for _ in range(len(G))]
-    vs = Queue()
+    vs = deque()
+    cp = None
+    path = []
 
     visited[s] = True
-    distance[s] = 0
-    vs.put(s)
+    for v in G[s]:
+        visited[v] = True
+        vs.append([s, v])
 
-    while vs.qsize() > 0:
-        cur = vs.get()
-        for v in G[cur]:
+    while len(vs) > 0:
+        cp = vs.popleft()
+        last = cp[-1]
+
+        if last == t:
+            for i in range(1, len(cp)):
+                path.append([cp[i-1], cp[i]])
+            break
+
+        for v in G[last]:
             if not visited[v]:
+                np = cp.copy()
                 visited[v] = True
-                distance[v] = distance[cur] + 1
-                vs.put(v)
+                np.append(v)
+                vs.append(np)
 
-    v = t
-    path =
+    return path
+
+
+#def shortest_path(G, s, t):
+#    distance = [-1 for _ in range(len(G))]
+#    parent = [-1 for _ in range(len(G))]
+#    vs = deque()
+#
+#    distance[s] = 0
+#    parent[s] = None
+#    vs.append(s)
+#
+#    while len(vs) > 0:
+#        cur = vs.popleft()
+#        for v in G[cur]:
+#            if distance[v] == -1:
+#                distance[v] = distance[cur] + 1
+#                parent[v] = cur
+#                vs.append(v)
+#
+#    if distance[t] == -1:
+#        return []
+#
+#    v = t
+#    i = distance[t]
+#    path = [[] for _ in range(i)]
+#
+#    while parent[v] is not None:
+#        i -= 1
+#        path[i] = [parent[v], v]
+#        v = parent[v]
+#
+#    return path
 
 
 def without_edge(G, e):
@@ -64,6 +74,7 @@ def without_edge(G, e):
 
 def longer(G, s, t):
     slen = shortest_path(G, s, t)
+    print(slen)
 
     for e in slen:
         sp = shortest_path(without_edge(G, e), s, t)
