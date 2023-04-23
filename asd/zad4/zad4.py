@@ -3,34 +3,56 @@ from zad4testy import runtests
 from queue import Queue
 
 
+#def shortest_path(G, s, t):
+#    visited = [False for _ in range(len(G))]
+#    vs = Queue()
+#    cp = None
+#    path = []
+#
+#    visited[s] = True
+#    for v in G[s]:
+#        visited[v] = True
+#        vs.put([s, v])
+#
+#    while vs.qsize() > 0:
+#        cp = vs.get()
+#        last = cp[-1]
+#
+#        if last == t:
+#            for i in range(1, len(cp)):
+#                path.append([cp[i-1], cp[i]])
+#            break
+#
+#        for v in G[last]:
+#            if not visited[v]:
+#                np = cp.copy()
+#                visited[v] = True
+#                np.append(v)
+#                vs.put(np)
+#
+#    return path
+
+
 def shortest_path(G, s, t):
     visited = [False for _ in range(len(G))]
+    distance = [-1 for _ in range(len(G))]
+    parent = [-1 for _ in range(len(G))]
     vs = Queue()
-    cp = None
-    path = []
 
     visited[s] = True
-    for v in G[s]:
-        visited[v] = True
-        vs.put([s, v])
+    distance[s] = 0
+    vs.put(s)
 
     while vs.qsize() > 0:
-        cp = vs.get()
-        last = cp[-1]
-
-        if last == t:
-            for i in range(1, len(cp)):
-                path.append([cp[i-1], cp[i]])
-            break
-
-        for v in G[last]:
+        cur = vs.get()
+        for v in G[cur]:
             if not visited[v]:
-                np = cp.copy()
                 visited[v] = True
-                np.append(v)
-                vs.put(np)
+                distance[v] = distance[cur] + 1
+                vs.put(v)
 
-    return path
+    v = t
+    path =
 
 
 def without_edge(G, e):
