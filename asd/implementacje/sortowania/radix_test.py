@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 from radix import radix, radixP2
 from random import randint
 

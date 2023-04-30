@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 from heapsort import heapsort
 from random import randint
 

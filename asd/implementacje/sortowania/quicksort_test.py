@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 from quicksort import qsort, qsort_iter
 from random import randint
 
