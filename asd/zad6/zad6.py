@@ -1,29 +1,39 @@
 #!/usr/bin/env python
 from zad6testy import runtests
-from queue import Queue
+from collections import deque
 
 INF = float("inf")
+STARTDIST = INF
 
 
 def binworker(M):
-    NIL = len(M)
-    STARTDIST = INF
-    H = [[] for _ in M]
-
-    for ms in range(len(M)):
-        for m in M[ms]:
-            H[m].append(ms)
-
-    mdist = [STARTDIST for _ in M] + [STARTDIST]  # 0 for NIL
-    hdist = [STARTDIST for _ in M] + [STARTDIST]  # like before
-
-    q = Queue()
 
     # /*
     #  G = U ∪ V ∪ {NIL}
     #  where U and V are the left and right sides of the bipartite graph and
     #  NIL is a special null vertex
     # */
+
+    NIL = len(M)
+
+    H = [[] for _ in M]
+    for ms in range(len(M)):
+        for m in M[ms]:
+            H[m].append(ms)
+
+    q = deque()
+    mdist = [STARTDIST for _ in M] + [NIL]
+
+    #  1 function Hopcroft–Karp is
+    #  2     for each u in U do
+    #  3         Pair_U[u] := NIL
+    #  4     for each v in V do
+    #  5         Pair_V[v] := NIL
+    #  6     matching := 0
+
+    mpair = [NIL for _ in M] + [NIL]
+    hpair = [NIL for _ in M] + [NIL]
+    matching = 0
 
     #  1 function BFS() is
     #  2     for each u in U do
@@ -44,23 +54,23 @@ def binworker(M):
 
     def BFS():
         for m in range(len(M)):
-            if mpair[m] is None:
+            if mpair[m] == NIL:
                 mdist[m] = 0
-                q.put(m)
+                q.append(m)
             else:
                 mdist[m] = INF
 
         mdist[NIL] = INF
-        while not q.empty():
+        while len(q) > 0:
 
-            m = q.get()
+            m = q.popleft()
             if mdist[m] < mdist[NIL]:
                 for h in M[m]:
-                    if hdist[hpair[h]] == INF:
-                        hdist[hpair[h]] = mdist[m] + 1
-                        q.put(hpair[h])
+                    if mdist[hpair[h]] == INF:
+                        mdist[hpair[h]] = mdist[m] + 1
+                        q.append(hpair[h])
 
-        return hdist[NIL] != INF
+        return mdist[NIL] != INF
 
     #  1 function DFS(u) is
     #  2     if u ≠ NIL then
@@ -75,8 +85,8 @@ def binworker(M):
     # 11     return true
 
     def DFS(m):
-        if m is not None:
-            for h in range(len(H)):
+        if m != NIL:
+            for h in M[m]:
                 if mdist[hpair[h]] == mdist[m]+1:
                     if DFS(hpair[h]):
                         hpair[h] = m
@@ -87,12 +97,6 @@ def binworker(M):
             return False
         return True
 
-    #  1 function Hopcroft–Karp is
-    #  2     for each u in U do
-    #  3         Pair_U[u] := NIL
-    #  4     for each v in V do
-    #  5         Pair_V[v] := NIL
-    #  6     matching := 0
     #  7     while BFS() = true do
     #  8         for each u in U do
     #  9             if Pair_U[u] = NIL then
@@ -100,18 +104,13 @@ def binworker(M):
     # 11                     matching := matching + 1
     # 12     return matching
 
-    mpair = [None for _ in M]
-    hpair = [None for _ in M]
-    matching = 0
-
     while BFS():
         for m in range(len(M)):
-            if mpair[m] is None:
+            if mpair[m] == NIL:
                 if DFS(m):
                     matching += 1
 
     return matching
 
 
-# zmien all_tests na True zeby uruchomic wszystkie testy
-runtests(binworker, all_tests=False)
+runtests(binworker, all_tests=True)
