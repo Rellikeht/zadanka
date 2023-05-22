@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 from zad6testy import runtests
-<<<<<<< HEAD
 from collections import deque
-=======
-from queue import Queue  # TODO lepsza kolejka
->>>>>>> refs/remotes/origin/main
 
 INF = float("inf")
 STARTDIST = INF
@@ -25,11 +21,7 @@ def binworker(M):
         for m in M[ms]:
             H[m].append(ms)
 
-<<<<<<< HEAD
     q = deque()
-=======
-    q = Queue()
->>>>>>> refs/remotes/origin/main
     mdist = [STARTDIST for _ in M] + [NIL]
 
     #  1 function Hopcroft–Karp is
@@ -76,11 +68,7 @@ def binworker(M):
                 for h in M[m]:
                     if mdist[hpair[h]] == INF:
                         mdist[hpair[h]] = mdist[m] + 1
-<<<<<<< HEAD
                         q.append(hpair[h])
-=======
-                        q.put(hpair[h])
->>>>>>> refs/remotes/origin/main
 
         return mdist[NIL] != INF
 
@@ -96,21 +84,7 @@ def binworker(M):
     # 10         return false
     # 11     return true
 
-    # def DFS(m):
-    #     if m != NIL:
-    #         for h in M[m]:
-    #             if mdist[hpair[h]] == mdist[m]+1:
-    #                 if DFS(hpair[h]):
-    #                     hpair[h] = m
-    #                     mpair[m] = h
-    #                     return True
-    #
-    #         mdist[m] = INF
-    #         return False
-    #     return True
-
     def DFS(m):
-<<<<<<< HEAD
         if m != NIL:
             for h in M[m]:
                 if mdist[hpair[h]] == mdist[m]+1:
@@ -118,16 +92,10 @@ def binworker(M):
                         hpair[h] = m
                         mpair[m] = h
                         return True
-=======
-        retval = True
-        vs = [m]
-        rs = [True]
->>>>>>> refs/remotes/origin/main
 
-        while m != NIL:
-            pass
-
-        return retval
+            mdist[m] = INF
+            return False
+        return True
 
     #  7     while BFS() = true do
     #  8         for each u in U do
@@ -145,8 +113,4 @@ def binworker(M):
     return matching
 
 
-<<<<<<< HEAD
-=======
-# zmien all_tests na True zeby uruchomic wszystkie testy
->>>>>>> refs/remotes/origin/main
 runtests(binworker, all_tests=True)
