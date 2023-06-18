@@ -44,29 +44,37 @@ def plan(T):
 
     if oils[-1] != M-1:
         oils.append(M-1)
-
-    tab = [[None for _ in range(M+1)] for _ in oils];
+    tab = [[M+1 for _ in range(M)] for _ in oils];
 
     def least(pos, touched, fuel):
+        #nonlocal m
+
+        #if touched > m or fuel < 0:
         if fuel < 0:
             return M
 
-        if fuel >= M-1-oils[pos]:
+        #if fuel > M-1-oils[pos]:
+        #    return touched
+
+        #if tab[pos][fuel] != M+1:
+        #    return tab[pos][fuel]
+
+        if pos == len(oils)-1:
+            #if tab[pos][fuel] > touched:
+            #tab[pos][fuel] = touched
+            #if touched < m:
+            #    m = touched
             return touched
 
-        if tab[pos][fuel] is not None:
-           return tab[pos][fuel]
+        nf = fuel-oils[pos+1]+oils[pos]
+        m1 = least(pos+1, touched, nf)
+        m2 = least(pos+1, touched+1, nf+oil[pos])
+        return min(m1, m2)
+        #tab[pos][fuel] = min(m1, m2)
+        #return tab[pos][fuel]
 
-        npos = pos+1
-        new = fuel-oils[npos]+oils[pos];
-        m1 = least(npos, touched, new)
-        m2 = least(npos, touched+1, new+oil[oils[pos]])
-
-        tab[pos][fuel] = m1 if m1 < m2 else m2
-        return tab[pos][fuel]
-
-    rv = least(0, 0, 0)
-    return rv
+    return least(0, 0, 0)
+    #return m
 
 
 runtests(plan, all_tests=True)

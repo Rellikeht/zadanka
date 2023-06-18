@@ -1,4 +1,5 @@
 from zad8testy import runtests
+from functools import cache
 
 
 def getOil(T, i, visited):
@@ -34,39 +35,37 @@ def plan(T):
     oil = [0 for _ in range(M)]
     visited = [[False for _ in range(M)] for _ in range(N)]
 
-    #m = M
     oils = []
 
     for i in range(M):
         oil[i] = getOil(T, i, visited)
         if oil[i] != 0:
             oils.append(i)
-
     if oils[-1] != M-1:
         oils.append(M-1)
 
     tab = [[None for _ in range(M+1)] for _ in oils];
 
-    def least(pos, touched, fuel):
+    def least(pos, fuel):
+
         if fuel < 0:
             return M
 
         if fuel >= M-1-oils[pos]:
-            return touched
+            return 0
 
         if tab[pos][fuel] is not None:
-           return tab[pos][fuel]
+            return tab[pos][fuel]
 
         npos = pos+1
-        new = fuel-oils[npos]+oils[pos];
-        m1 = least(npos, touched, new)
-        m2 = least(npos, touched+1, new+oil[oils[pos]])
+        new = fuel-oils[npos]+oils[pos]
+        v1 = least(npos, new)
+        v2 = 1+least(npos, new+oil[oils[pos]])
 
-        tab[pos][fuel] = m1 if m1 < m2 else m2
+        tab[pos][fuel] = v1 if v1 < v2 else v2
         return tab[pos][fuel]
 
-    rv = least(0, 0, 0)
-    return rv
+    return least(0, 0)
 
 
 runtests(plan, all_tests=True)
