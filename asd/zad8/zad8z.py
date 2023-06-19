@@ -1,4 +1,5 @@
 from zad8testy import runtests
+from heapq import heappush, heappop
 
 
 def getOil(T, i, visited):
@@ -42,41 +43,27 @@ def plan(T):
     if oils[-1] != M-1:
         oils.append(M-1)
 
-    tab = [[None for _ in range(M+1)] for _ in oils]
-    m = M
+    elems = []
+    MAX = M*N
+    pos = 1
+    fuel = oil[0]
+    touched = 1
 
-    def least(pos, fuel, touched):
-        nonlocal m
+    while pos != len(oils):
+        fuel = fuel+oils[pos-1]-oils[pos]
 
         if fuel < 0:
-            return M
+            fuel += MAX - heappop(elems)
+            touched += 1
 
-        if fuel >= M-1-oils[pos]:
-            if touched < m:
-                m = touched
-            return 0
+        heappush(elems, MAX - oil[oils[pos]])
+        pos += 1
 
-        if touched >= m:
-            return M
+    while fuel < 0:
+        fuel += MAX - heappop(elems)
+        touched += 1
 
-        if tab[pos][fuel] is not None:
-            #mv = touched + tab[pos][fuel]
-            #if mv < m:
-            #    m = mv
-            return tab[pos][fuel]
-
-        npos = pos+1
-        new = fuel-oils[npos]+oils[pos]
-        v1 = least(npos, new, touched)
-        v2 = 1+least(npos, new+oil[oils[pos]], touched+1)
-
-        tab[pos][fuel] = (v1 if v1 < v2 else v2)
-        #mv = touched + tab[pos][fuel]
-        #if mv < m:
-        #    m = mv
-        return tab[pos][fuel]
-
-    return least(0, 0, 0)
+    return touched
 
 
 runtests(plan, all_tests=True)

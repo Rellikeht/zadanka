@@ -44,7 +44,7 @@ def plan(T):
     if oils[-1] != M-1:
         oils.append(M-1)
 
-    tab = [[None for _ in range(M+1)] for _ in oils];
+    tab = [[None for _ in range(M+1)] for _ in oils]
 
     def least(pos, fuel):
 
