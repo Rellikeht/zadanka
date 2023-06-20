@@ -1,5 +1,4 @@
 from zad8testy import runtests
-from functools import cache
 
 
 def getOil(T, i, visited):
@@ -34,7 +33,6 @@ def plan(T):
 
     oil = [0 for _ in range(M)]
     visited = [[False for _ in range(M)] for _ in range(N)]
-
     oils = []
 
     for i in range(M):

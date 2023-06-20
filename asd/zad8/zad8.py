@@ -42,7 +42,7 @@ def plan(T):
     if oils[-1] != M-1:
         oils.append(M-1)
 
-    tab = [[None for _ in range(M+1)] for _ in oils]
+    tab = [[None for _ in T[0]] for _ in oils]
     m = M
 
     def least(pos, fuel, touched):
@@ -56,7 +56,7 @@ def plan(T):
                 m = touched
             return 0
 
-        if touched >= m:
+        if touched > m:
             return M
 
         if tab[pos][fuel] is not None:
@@ -71,9 +71,9 @@ def plan(T):
         v2 = 1+least(npos, new+oil[oils[pos]], touched+1)
 
         tab[pos][fuel] = (v1 if v1 < v2 else v2)
-        #mv = touched + tab[pos][fuel]
-        #if mv < m:
-        #    m = mv
+        mv = touched + tab[pos][fuel]
+        if mv < m:
+            m = mv
         return tab[pos][fuel]
 
     return least(0, 0, 0)
