@@ -7,18 +7,18 @@
 !Makefile
 !LICENSE
 
-!*.py
-!*.c
-!*.h
-!*.hpp
-!*.cpp
-!*.ml
-!*.nim
+#!*.py
+#!*.c
+#!*.h
+#!*.hpp
+#!*.cpp
+#!*.ml
+#!*.nim
 
-!*.pdf
-!*.png
-!*.md
-!*.txt
+#!*.pdf
+#!*.png
+#!*.md
+#!*.txt
 
 **/__pycache__
 *.swp
