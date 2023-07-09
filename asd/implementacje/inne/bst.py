@@ -34,23 +34,25 @@ class BST:
             self = self.right
         return self
 
-    def pred(self, key):
-        NotImplemented
-        if self.left is None:
-            while self.parent is not None and self.parent.left.key < self.key:
+    def succ(self, key=None):
+        if key is None:
+            key = self.key
+        if self.right is None:
+            while self.parent is not None and self.parent.key < key:
                 self = self.parent
-            if self.parent is None:
-                return None
-            elif self.parent.left.key >= self.key:
-                return self.parent
-        return self.left.max()
-
-    def succ(self, key):
-        NotImplemented
-
+            return self.parent
         return self.right.min()
 
-    def insert(self, key, data):
+    def pred(self, key=None):
+        if key is None:
+            key = self.key
+        if self.left is None:
+            while self.parent is not None and self.parent.key > key:
+                self = self.parent
+            return self.parent
+        return self.left.max()
+
+    def insert(self, key, data=None):
         # Safety check
         # if self.key is None:
         #     self.key = key
@@ -59,22 +61,59 @@ class BST:
 
         parent = self
         while self is not None:
-            parent = self
-
-            # Safety check
-            if self.key == key:
+            if self.key == key:  # Safety check
                 raise KeyError("Key already present")
 
-            if self.key < key:
+            parent = self
+            if self.key > key:
                 self = self.left
             else:
                 self = self.right
 
         new = BST(parent=parent, key=key, data=data)
-        if key < parent.key:
+        if parent.key > key:
             parent.left = new
         else:
             parent.right = new
 
-    def remove(self, key):
-        NotImplemented
+    def remove(self, key=None):
+        if key is None:
+            key = self.key
+
+        while True:
+            if self is None:
+                raise KeyError("Key not present in tree")
+
+            if self.key > key:
+                self = self.left
+            elif self.key < key:
+                self = self.right
+
+            else:
+                if self.left is None and self.right is None:
+                    if self.parent.left is self:
+                        self.parent.left = None
+                    else:
+                        self.parent.right = None
+
+                elif self.left is None and self.right is not None:
+                    if self.parent.left is self:
+                        self.parent.left = self.right
+                    else:
+                        self.parent.right = self.right
+                    self.right.parent = self.parent
+
+                elif self.right is None and self.left is not None:
+                    if self.parent.left is self:
+                        self.parent.left = self.left
+                    else:
+                        self.parent.right = self.left
+                    self.left.parent = self.parent
+
+                else:
+                    succ = self.right.min()
+                    self.key = succ.key
+                    self.data = succ.data
+                    succ.remove()
+
+                return
