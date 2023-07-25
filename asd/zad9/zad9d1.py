@@ -24,15 +24,9 @@ def min_cost(O, C, T, L):
             return MAX
         if left < 0:
             return MAX
-
         if position > LAST:
             if cur_cost < cur_min_cost:
                 cur_min_cost = cur_cost
-
-                ks = tuple(without_memo.keys())
-                for i in ks:
-                    if without_memo[i] >= cur_min_cost:
-                        without_memo.pop(i)
             return 0
 
         state = (left, position)
@@ -63,14 +57,8 @@ def min_cost(O, C, T, L):
         if position > LAST:
             if left < 0:
                 return MAX
-
             if cur_cost < cur_min_cost:
                 cur_min_cost = cur_cost
-
-                for i in with_memo.keys():
-                    if with_memo[i] >= cur_min_cost:
-                        with_memo.pop(i)
-
             return 0
 
         if left < 0:
@@ -97,37 +85,7 @@ def min_cost(O, C, T, L):
         with_memo[state] = result
         return result
 
-    cstop = 0
-    ctime = T
-    ccost = 0
-    cpos = 0
+    return goWithAdditional(START, 0, 0)
 
-    while cstop < len(STOPS):
-        nstop = cstop
-        mstop = nstop
-
-        while STOPS[nstop][0] - cpos < ctime:
-            if STOPS[nstop][1] < STOPS[mstop][1]:
-                mstop = nstop
-            nstop += 1
-
-            if nstop >= len(STOPS):
-                return ccost
-
-        cstop = mstop+1
-        ccost += STOPS[mstop][1]
-
-    return ccost
-
-    # return goWithAdditional(START, 0, 0)
-
-
-# 26
-# 275
-# 24
-# 39
-# 468
-# 118299
-# 295560
 
 runtests(min_cost, all_tests=True)
