@@ -1,5 +1,4 @@
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class ogr {
@@ -51,8 +50,22 @@ public class ogr {
     return true;
   }
 
+  public static List<Integer> optimal1;
+  public static List<Integer> optimal2;
+
+  static {
+    Integer[] o1 = {0};
+    Integer[] o2 = {0, 1};
+
+    optimal1 = new ArrayList<Integer>(Arrays.asList(o1));
+    optimal2 = new ArrayList<Integer>(Arrays.asList(o2));
+  }
+
   public static List<Integer> findOptimal(int size) {
-    // TODO
+    if (size == 1)
+      return optimal1;
+    if (size == 2)
+      return optimal2;
     return new ArrayList<>(size);
   }
 
