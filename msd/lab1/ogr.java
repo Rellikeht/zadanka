@@ -16,29 +16,80 @@ public class ogr {
     return true;
   }
 
-  public static int[] optimal1 = {0};
-  public static int[] optimal2 = {0, 1};
+  public static int[] optimal1 = {};
+  public static int[] optimal2 = {1};
 
-  public static int[] nextPartition(int[] curPartition) {
-    if (curPartition[curPartition.length - 1] == 1)
-      return null;
-    int[] part = Arrays.copyOf(curPartition, curPartition.length);
-    int i = part.length - 1;
-    while (i >= 0 && part[i] > 1)
-      i++;
-    // TODO
+  public static int nextPartition(int[] part, int k) {
+    if (part[part.length - 1] == 1)
+      return -1;
+    int p = k - 1;
+    while (part[p] == 1)
+      p--;
 
-    return part;
+    part[p]--;
+    int s = k - p;
+
+    while (s > 0) {
+      if (s >= part[p])
+        part[p + 1] = part[p];
+      else
+        part[p + 1] = s;
+
+      s -= part[p + 1];
+      p += 1;
+    }
+
+    return p + 1;
+  }
+
+  public static boolean nextPerm(int[] perm) {
+    int n = perm.length;
+    int i = n - 2;
+
+    while (i >= 0 && perm[i] > perm[i + 1])
+      i--;
+    if (i < 0) {
+      return false;
+    }
+
+    int j = n - 1;
+    while (perm[j] < perm[i])
+      j--;
+
+    int tmp = perm[i];
+    perm[i] = perm[j];
+    perm[j] = tmp;
+
+    int k = i + 1;
+    int l = n - 1;
+    while (l > k) {
+      tmp = perm[l];
+      perm[l] = perm[k];
+      perm[k] = tmp;
+
+      k += 1;
+      l -= 1;
+    }
+
+    return true;
   }
 
   public static void applyPartition(int[] base, int[] partition) {
-    for (int i = 0; i < base.length; i++) {
-      base[i] += partition[i];
+    int n = partition.length;
+    for (int i = 0; i < Math.min(n, base.length); i++) {
+      base[i] += partition[n - 1 - i];
     }
   }
 
-  public static void nextPerm(int[] perm) {
-    // TODO
+  public static int[] checkPerms(int[] base) {
+    int[] perm = Arrays.copyOf(base, base.length);
+    do {
+      if (perm[0] > perm[perm.length - 1])
+        continue;
+      if (checkLine(perm))
+        return perm;
+    } while (nextPerm(perm));
+    return null;
   }
 
   public static int[] findOptimal(int size) {
@@ -46,45 +97,71 @@ public class ogr {
       return optimal1;
     if (size == 2)
       return optimal2;
+    size--;
 
     int[] base = new int[size];
     for (int i = 0; i < size; i++)
       base[i] = i + 1;
     int[] perm;
-    int[] partition = new int[size];
-    int numberToPart = -1;
+    int numberToPart = 0;
 
     while (true) {
+      perm = checkPerms(base);
+      if (perm != null)
+        return perm;
       numberToPart += 1;
-      for (int i = 0; i < size - 1; i++)
-        partition[i] = 0;
-      partition[size - 1] = numberToPart;
-      while (partition != null) {
+      int[] partition = new int[numberToPart];
+      partition[0] = numberToPart;
+      int k = 1;
+
+      do {
         perm = Arrays.copyOf(base, base.length);
         applyPartition(perm, partition);
-        while (perm != null) {
-          // TODO filter permutations that have first element greater
-          // than last, no idea if that will be if here or in while
-          if (checkLine(perm))
-            return perm;
-          nextPerm(perm);
-        }
-        partition = nextPartition(partition);
-      }
+        perm = checkPerms(perm);
+        k = nextPartition(partition, k);
+      } while (k > 0);
     }
   }
 
   public static void main(String[] args) {
     int size = 5;
-    if (args.length > 1) {
+    if (args.length > 0) {
       try {
-        size = Integer.parseInt(args[1]);
+        size = Integer.parseInt(args[0]);
       } finally {
       }
     }
+
+    // int[] perm = {1, 2, 3, 4, 5};
+    // do {
+    //   for (int e : perm) {
+    //     System.out.printf("%d ", e);
+    //   }
+    //   System.out.println();
+    // } while (nextPerm(perm));
+    // return;
+
+    // int[] part = new int[size];
+    // part[0] = size;
+    // int k = 1;
+
+    // do {
+    //   System.out.printf("%d: ", k);
+    //   for (int e : part) {
+    //     System.out.printf("%d ", e);
+    //   }
+    //   System.out.println();
+    //   k = nextPartition(part, k);
+    // } while (k > 0);
+    // return;
+
     // TODO time ?
-    for (int m : findOptimal(size)) {
-      System.out.printf("%d ", m);
+    int i = 0;
+    int[] optimal = findOptimal(size);
+    System.out.printf("%d ", i);
+    for (int m : optimal) {
+      i += m;
+      System.out.printf("%d ", i);
     }
     System.out.println();
   }
