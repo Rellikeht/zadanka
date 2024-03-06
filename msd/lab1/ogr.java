@@ -1,47 +1,13 @@
+// vim: set sw=2 ts=2:
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class ogr {
-  public static boolean isPrime(int number) {
-    if (number < 3)
-      return false;
-    int i = 3;
-    while (i < Math.sqrt(number) + 1) {
-      if (number % i == 0)
-        return false;
-      i += 2;
-    }
-    return true;
-  }
-
-  public static List<Integer> primesTo(int n) {
-    List<Integer> nums = new ArrayList<>((int)Math.sqrt(n));
-    int i = 3;
-    while (i < n) {
-      if (isPrime(i))
-        nums.add(i);
-      i += 2;
-    }
-    return nums;
-  }
-
-  public static Integer[] primes =
-      primesTo(100).stream().toArray(Integer[] ::new);
-
-  public static List<Integer> erdosTuran(int p) {
-    List<Integer> marks = new ArrayList<>(p);
-    for (int i = 0; i < p; i++) {
-      marks.add(2 * p * i + (i * i % p));
-    }
-    marks.sort(Integer::compare);
-    return marks;
-  }
-
-  public static boolean checkLine(List<Integer> marks) {
-    Set<Integer> lengths = new HashSet<>(marks.size() * marks.size());
-    for (int i = 0; i < marks.size(); i++) {
-      for (int j = i + 1; j < marks.size(); j++) {
-        int dist = marks.get(j) - marks.get(i);
+  public static boolean checkLine(int[] marks) {
+    Set<Integer> lengths = new HashSet<>(marks.length * marks.length);
+    for (int i = 0; i < marks.length; i++) {
+      for (int j = i + 1; j < marks.length; j++) {
+        int dist = marks[j] - marks[i];
         if (lengths.contains(dist))
           return false;
         lengths.add(dist);
@@ -50,23 +16,62 @@ public class ogr {
     return true;
   }
 
-  public static List<Integer> optimal1;
-  public static List<Integer> optimal2;
+  public static int[] optimal1 = {0};
+  public static int[] optimal2 = {0, 1};
 
-  static {
-    Integer[] o1 = {0};
-    Integer[] o2 = {0, 1};
+  public static int[] nextPartition(int[] curPartition) {
+    if (curPartition[curPartition.length - 1] == 1)
+      return null;
+    int[] part = Arrays.copyOf(curPartition, curPartition.length);
+    int i = part.length - 1;
+    while (i >= 0 && part[i] > 1)
+      i++;
+    // TODO
 
-    optimal1 = new ArrayList<Integer>(Arrays.asList(o1));
-    optimal2 = new ArrayList<Integer>(Arrays.asList(o2));
+    return part;
   }
 
-  public static List<Integer> findOptimal(int size) {
+  public static void applyPartition(int[] base, int[] partition) {
+    for (int i = 0; i < base.length; i++) {
+      base[i] += partition[i];
+    }
+  }
+
+  public static void nextPerm(int[] perm) {
+    // TODO
+  }
+
+  public static int[] findOptimal(int size) {
     if (size == 1)
       return optimal1;
     if (size == 2)
       return optimal2;
-    return new ArrayList<>(size);
+
+    int[] base = new int[size];
+    for (int i = 0; i < size; i++)
+      base[i] = i + 1;
+    int[] perm;
+    int[] partition = new int[size];
+    int numberToPart = -1;
+
+    while (true) {
+      numberToPart += 1;
+      for (int i = 0; i < size - 1; i++)
+        partition[i] = 0;
+      partition[size - 1] = numberToPart;
+      while (partition != null) {
+        perm = Arrays.copyOf(base, base.length);
+        applyPartition(perm, partition);
+        while (perm != null) {
+          // TODO filter permutations that have first element greater
+          // than last, no idea if that will be if here or in while
+          if (checkLine(perm))
+            return perm;
+          nextPerm(perm);
+        }
+        partition = nextPartition(partition);
+      }
+    }
   }
 
   public static void main(String[] args) {
@@ -77,6 +82,7 @@ public class ogr {
       } finally {
       }
     }
+    // TODO time ?
     for (int m : findOptimal(size)) {
       System.out.printf("%d ", m);
     }
