@@ -8,7 +8,8 @@ SRC = collatz.c
 OBJECT = collatz.o
 
 TEST = main.c
-TEST_DYN = main_dyn.c
+TESTO = main.o
+TEST_DYN = main_dyn
 TEST_STAT = main_stat
 TEST_SHR = main_shr
 
@@ -17,7 +18,7 @@ TEST_SHR = main_shr
 all: static dynamic test
 
 clean:
-	rm -rf *.o *.so *.a main_*
+	rm -rf *.o *.so *.a $(TEST_STAT) $(TEST_SHR) $(TEST_DYN)
 
 obj:
 	$(CC) $(CFLAGS) -c $(SRC)
@@ -29,12 +30,15 @@ static: obj
 	ar crs $(STATIC) $(OBJECT)
 
 test_static: clean static
-	gcc $(LDFLAGS) $(TEST) -o $(TEST_STAT) -L. -lcollatz
+	$(CC) $(CFLAGS) -c $(TEST)
+	gcc $(LDFLAGS) $(TESTO) -o $(TEST_STAT) -L. -lcollatz
 
-test_shared: clean dynamic
-	gcc $(LDFLAGS) $(TEST) -o $(TEST_SHR) -L. -lcollatz -Wl,-rpath=`pwd`
+test_shared: dynamic
+	$(CC) $(CFLAGS) -c $(TEST)
+	gcc $(LDFLAGS) $(TESTO) -o $(TEST_SHR) -L. -lcollatz -Wl,-rpath=`pwd`
 
-test_dynamic: clean dynamic
-	gcc $(LDFLAGS) $(TEST_DYN) -o $(TEST_SHR) -L. -lcollatz -Wl,-rpath=`pwd`
+test_dynamic: dynamic
+	$(CC) $(CFLAGS) -Ddynlib -c $(TEST)
+	gcc $(LDFLAGS) $(TESTO) -o $(TEST_DYN) -L. -lcollatz -Wl,-rpath=`pwd`
 
-test: test_dynamic test_static test_shared
+test: clean test_static test_dynamic test_shared
