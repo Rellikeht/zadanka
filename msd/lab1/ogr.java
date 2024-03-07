@@ -148,10 +148,12 @@ public class ogr {
       }
     }
 
-    // TODO time ?
     int i = 0;
+    long start = System.currentTimeMillis();
     int[] optimal = findOptimal(size);
-    System.out.printf("%d ", i);
+    long finish = System.currentTimeMillis();
+
+    System.out.printf("Czas: %d ms\nLinijka: %d ", finish - start, i);
     for (int m : optimal) {
       i += m;
       System.out.printf("%d ", i);
