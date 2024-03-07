@@ -8,7 +8,12 @@
 !LICENSE
 
 **/__pycache__
+*_cache*
 *.swp
+*.gz
+
 *.out
 *.class
-*_cache*
+*.o
+*.a
+*.so
