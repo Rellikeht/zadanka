@@ -28,6 +28,8 @@ while part[0] > 1:
         p += 1
 
     k = p + 1
+    for i in range(k, n):
+        part[i] = 0
     print(k, part)
 
 # k = 1

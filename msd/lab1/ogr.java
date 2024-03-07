@@ -3,7 +3,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class ogr {
-  public static boolean checkLine(int[] marks) {
+  public static boolean checkLine(int[] spaces) {
+    int[] marks = new int[spaces.length + 1];
+    for (int j = 1; j < marks.length; j++) {
+      marks[j] = marks[j - 1] + spaces[j - 1];
+    }
+
     Set<Integer> lengths = new HashSet<>(marks.length * marks.length);
     for (int i = 0; i < marks.length; i++) {
       for (int j = i + 1; j < marks.length; j++) {
@@ -46,7 +51,8 @@ public class ogr {
       p += 1;
     }
 
-    return p + 1;
+    k = p + 1;
+    return k;
   }
 
   public static boolean nextPerm(int[] perm) {
@@ -81,32 +87,11 @@ public class ogr {
     return true;
   }
 
-  public static void applyPartition(int[] base, int[] partition) {
+  public static void applyPartition(int[] base, int[] partition, int k) {
     int n = partition.length;
-    for (int i = 0; i < Math.min(n, base.length); i++) {
+    for (int i = 0; i < k; i++) {
       base[i] += partition[n - 1 - i];
     }
-  }
-
-  public static int[] checkPerms(int[] base) {
-    int[] perm = Arrays.copyOf(base, base.length);
-    do {
-      if (perm[0] > perm[perm.length - 1])
-        continue;
-      if (checkLine(perm))
-        return perm;
-    } while (nextPerm(perm));
-    return null;
-  }
-
-  public static boolean equal(int[] p1, int[] p2, int size) {
-    if (size >= p1.length)
-      return false;
-    for (int i = 0; i < size; i++) {
-      if (p1[i] != p2[i])
-        return false;
-    }
-    return true;
   }
 
   public static int[] findOptimal(int size) {
@@ -120,7 +105,7 @@ public class ogr {
     int[] perm, partition;
     for (int i = 0; i < size; i++)
       base[i] = i + 1;
-    int numberToPart = 0, k;
+    int numberToPart = 0;
 
     while (true) {
       perm = Arrays.copyOf(base, base.length);
@@ -134,26 +119,22 @@ public class ogr {
       numberToPart += 1;
       partition = new int[numberToPart];
       partition[0] = numberToPart;
-      k = 1;
+      int k = 1;
 
       do {
         perm = Arrays.copyOf(base, base.length);
         do {
           int[] applied = Arrays.copyOf(perm, perm.length);
-          if (applied[0] > applied[applied.length - 1])
+          applyPartition(applied, partition, k);
+          if (applied[0] >= applied[applied.length - 1])
             continue;
-          applyPartition(applied, partition);
           if (checkLine(applied))
             return applied;
         } while (nextPerm(perm));
 
-        int[] prevPart;
         do {
-          prevPart = Arrays.copyOf(partition, partition.length);
           k = nextPartition(partition, k);
-        } while (k > 0 && equal(partition, prevPart, size));
-        // System.out.printf("%d: ", k);
-        // printPart(partition);
+        } while (k > size);
       } while (k > 0);
     }
   }
@@ -166,31 +147,6 @@ public class ogr {
       } finally {
       }
     }
-
-    //     int[] perm = new int[size];
-    //     for (int i = 0; i < size; i++)
-    //       perm[i] = i + 1;
-    //     do {
-    //       for (int e : perm) {
-    //         System.out.printf("%d ", e);
-    //       }
-    //       System.out.println();
-    //     } while (nextPerm(perm));
-    //     return;
-
-    //     int[] part = new int[size];
-    //     part[0] = size;
-    //     int k = 1;
-
-    //     do {
-    //       System.out.printf("%d: ", k);
-    //       for (int e : part) {
-    //         System.out.printf("%d ", e);
-    //       }
-    //       System.out.println();
-    //       k = nextPartition(part, k);
-    //     } while (k > 0);
-    //     return;
 
     // TODO time ?
     int i = 0;

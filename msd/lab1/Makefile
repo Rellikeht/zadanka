@@ -1,8 +1,8 @@
 ogr:
-	javac ogr.java
+	javac ogr.java 2>&1 | grep -v Picked || true
 
-ogrr: ogr
-	java ogr
+run: ogr
+	java ogr 2>&1 | grep -v Picked || true
 
 ruler:
 	javac ruler.java
