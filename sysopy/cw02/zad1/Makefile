@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -O0 -g
+CFLAGS = -Wall -O0 -g -pedantic -Werror
 LDFLAGS = -Wall -O0
 
 STATIC = libcollatz.a
@@ -20,7 +20,7 @@ all: static dynamic test
 clean:
 	rm -rf *.o *.so *.a $(TEST_STAT) $(TEST_SHR) $(TEST_DYN)
 
-obj:
+obj: $(SRC)
 	$(CC) $(CFLAGS) -c $(SRC)
 
 dynamic: obj
@@ -29,15 +29,15 @@ dynamic: obj
 static: obj
 	ar crs $(STATIC) $(OBJECT)
 
-test_static: clean static
+test_static: $(TEST) clean static
 	$(CC) $(CFLAGS) -c $(TEST)
 	gcc $(LDFLAGS) $(TESTO) -o $(TEST_STAT) -L. -lcollatz
 
-test_shared: dynamic
+test_shared: $(TEST) dynamic
 	$(CC) $(CFLAGS) -c $(TEST)
 	gcc $(LDFLAGS) $(TESTO) -o $(TEST_SHR) -L. -lcollatz -Wl,-rpath=`pwd`
 
-test_dynamic: dynamic
+test_dynamic: $(TEST) dynamic
 	$(CC) $(CFLAGS) -Ddynlib -c $(TEST)
 	gcc $(LDFLAGS) $(TESTO) -o $(TEST_DYN) -L. -lcollatz -Wl,-rpath=`pwd`
 
