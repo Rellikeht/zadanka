@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 
 #define doOrErr(code, op, args...)                                             \
@@ -12,33 +13,27 @@ int main(int argc, char *argv[]) {
 
   char *fname = argv[1];
   FILE *file = fopen(fname, "r");
-  fpos_t *pos;
+  /* fpos_t *pos; */
 
   doOrErr(1, argc < 2, "Należy podać nazwę pliku\n");
-  doOrErr(2, ferror(file), "Error reading file %s: %i\n", fname, err);
-  /* doOrErr(2, fseek(file, 0, SEEK_END), "Error seeking: %i\n", err); */
+  doOrErr(2, ferror(file), "Problem przy odczycie pliku %s: %i\n", fname, err);
+  doOrErr(2, fseek(file, -1, SEEK_END),
+          "Problem z przesuwaniem wskaźnika: %i\n", errno);
 
-  // fflush !!!
+  /* fflush !!! */
 
-  /* #ifdef BYTE_BY_BYTE */
-  /* doOrErr(3, fgetpos(file, pos), "Error getting pos: %i\n", err); */
-  /* while ((*pos) != SEEK_SET) { */
-  /* while ((*pos) != SEEK_END) { */
-  /* doOrErr(3, fgetpos(file, pos), "Error getting pos: %i\n", err); */
-  /* } */
-
+#ifdef BYTE_BY_BYTE
   int c;
-  while (!feof(file)) {
+  do {
     c = fgetc(file);
-    doOrErr(2, ferror(file), "Error reading file %s: %i\n", fname, err);
+    doOrErr(3, ferror(file), "Problem z odczytem pliku %s: %i\n", fname, err);
     putchar(c);
-    /* doOrErr(4, ferror(stdout), "Error reading file %s: %i\n", fname, err); */
-  }
+  } while (fseek(file, -2, SEEK_CUR) == 0);
+  doOrErr(4, ferror(file), "Problem z odczytem pliku %s: %i\n", fname, err);
 
-  /* #else */
-  // Dla wersji z blokami może być lepiej użyć open/close/seek
-  // są niskopoziomowe, lepiej nie
-  /* #endif */
+#else
+
+#endif
 
   fclose(file);
   return 0;

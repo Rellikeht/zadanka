@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -O2 -g -pedantic -Werror
-LDFLAGS = -Wall -O2
+CFLAGS = -Wall -O0 -std=c89 -g -Werror
+LDFLAGS = -Wall -O0
 
 SRC = main.c
 BBB = bbb
