@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -11,7 +12,9 @@
 
 int main(int argc, char *argv[]) {
   int err = 0;
-  char *name;
+  const char *name = NULL;
+  DIR *dir = NULL;
+  struct dirent *entry = NULL;
   struct stat s = {0};
   long long sum = 0;
 
@@ -20,7 +23,12 @@ int main(int argc, char *argv[]) {
   else
     name = argv[1];
 
-  doOrErr(2, stat(name, &s), "Nie można wykonać stat: %i\n", errno);
+  dir = opendir(name);
+  doOrErr(2, dir == NULL, "opendir się nie powiodło: %i\n", errno);
+  do {
+    entry = readdir(dir);
+  } while (entry != NULL);
+  doOrErr(3, errno != 0, "readdir się nie powiodło: %i\n", errno);
 
   printf("Sumaryczny rozmiar: %lli\n", sum);
   return 0;

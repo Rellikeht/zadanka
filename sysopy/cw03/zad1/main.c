@@ -10,22 +10,23 @@
 
 #define transfer(amount)                                                       \
   fread(in, sizeof(char), amount, file);                                       \
-  doOrErr(111, ferror(file), "Problem przy odczycie pliku %s: %i\n", fname,    \
+  doOrErr(121, ferror(file), "Problem przy odczycie pliku %s: %i\n", fname,    \
           err);                                                                \
   for (i = 0; i < amount; i++)                                                 \
     out[i] = in[amount - i - 1];                                               \
-  fwrite(out, sizeof(char), amount, stdout)
+  doOrErr(144, fwrite(out, sizeof(char), amount, stdout) != amount,            \
+          "fwrite zapisało mniej bajtów niż miało: %i\n", errno);              \
+  doOrErr(169, fflush(stdout), "Problem przy wypisywaniu: %i\n", errno);
 
 int main(int argc, char *argv[]) {
   int err;
-  char *fname;
+  const char *fname;
   FILE *file;
 
   doOrErr(1, argc < 2, "Należy podać nazwę pliku\n");
   fname = argv[1];
   file = fopen(fname, "r");
   doOrErr(2, ferror(file), "Problem przy odczycie pliku %s: %i\n", fname, err);
-  /* fflush !!! */
 
 #ifdef BYTE_BY_BYTE
   doOrErr(2, fseek(file, -1, SEEK_END),
