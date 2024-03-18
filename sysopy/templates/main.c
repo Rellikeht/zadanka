@@ -1,6 +1,5 @@
 #include <errno.h>
 #include <stdio.h>
-#include <sys/stat.h>
 
 #define doOrErr(code, op, args...)                                             \
   err = op;                                                                    \
@@ -12,16 +11,11 @@
 int main(int argc, char *argv[]) {
   int err = 0;
   char *name;
-  struct stat s = {0};
-  long long sum = 0;
 
   if (argc < 2)
     name = ".";
   else
     name = argv[1];
 
-  doOrErr(2, stat(name, &s), "Nie można wykonać stat: %i\n", errno);
-
-  printf("Sumaryczny rozmiar: %lli\n", sum);
   return 0;
 }
