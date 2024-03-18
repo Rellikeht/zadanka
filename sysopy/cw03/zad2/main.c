@@ -10,26 +10,27 @@
     return code;                                                               \
   }
 
-int main(int argc, char *argv[]) {
+int main() {
   int err = 0;
-  const char *name = NULL;
   DIR *dir = NULL;
   struct dirent *entry = NULL;
   struct stat s = {0};
   long long sum = 0;
 
-  if (argc < 2)
-    name = ".";
-  else
-    name = argv[1];
-
-  dir = opendir(name);
+  dir = opendir(".");
   doOrErr(2, dir == NULL, "opendir się nie powiodło: %i\n", errno);
-  do {
-    entry = readdir(dir);
-  } while (entry != NULL);
-  doOrErr(3, errno != 0, "readdir się nie powiodło: %i\n", errno);
+  entry = readdir(dir);
+  entry = readdir(dir);
 
+  while ((entry = readdir(dir)) != NULL) {
+    doOrErr(3, stat(entry->d_name, &s), "stat się nie powiodło: %i\n", errno);
+    if (!S_ISDIR(s.st_mode)) {
+      printf("%s: %li\n", entry->d_name, s.st_size);
+      sum += s.st_size;
+    }
+  }
+
+  doOrErr(4, errno != 0, "readdir się nie powiodło: %i\n", errno);
   printf("Sumaryczny rozmiar: %lli\n", sum);
   return 0;
 }

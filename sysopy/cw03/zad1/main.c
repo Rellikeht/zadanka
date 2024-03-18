@@ -38,15 +38,15 @@ int main(int argc, char *argv[]) {
     doOrErr(3, ferror(file), "Problem z odczytem pliku %s: %i\n", fname, err);
     putchar(c);
   } while (fseek(file, -2, SEEK_CUR) == 0);
-
 #else
+
 #define BSIZE 1024
   char in[BSIZE + 1] = {0};
   char out[BSIZE + 1] = {0};
   int i, amount;
 
-  doOrErr(2, fseek(file, -1, SEEK_END),
-          "Problem z przesuwaniem wskaźnika: %i\n", errno);
+  doOrErr(2, fseek(file, 0, SEEK_END), "Problem z przesuwaniem wskaźnika: %i\n",
+          errno);
 
   while (ftell(file) >= BSIZE) {
     doOrErr(3, fseek(file, -BSIZE, SEEK_CUR),
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
             "Problem z przesuwaniem wskaźnika: %i\n", errno);
   }
 
-  amount = ftell(file) + 1;
+  amount = ftell(file);
   doOrErr(5, fseek(file, 0, SEEK_SET), "Problem z przesuwaniem wskaźnika: %i\n",
           errno);
   transfer(amount);
