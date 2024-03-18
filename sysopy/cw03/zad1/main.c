@@ -42,27 +42,21 @@ int main(int argc, char *argv[]) {
 #define BSIZE 1024
   char in[BSIZE + 1] = {0};
   char out[BSIZE + 1] = {0};
-  int i;
-  /* TODO Errs */
+  int i, amount;
 
   doOrErr(2, fseek(file, -1, SEEK_END),
           "Problem z przesuwaniem wskaźnika: %i\n", errno);
 
-  if (ftell(file) >= BSIZE) {
+  while (ftell(file) >= BSIZE) {
     doOrErr(3, fseek(file, -BSIZE, SEEK_CUR),
             "Problem z przesuwaniem wskaźnika: %i\n", errno);
-  }
-
-  while (ftell(file) >= BSIZE) {
+    transfer(BSIZE);
     doOrErr(4, fseek(file, -BSIZE, SEEK_CUR),
             "Problem z przesuwaniem wskaźnika: %i\n", errno);
-    transfer(BSIZE);
-    doOrErr(5, fseek(file, -BSIZE, SEEK_CUR),
-            "Problem z przesuwaniem wskaźnika: %i\n", errno);
   }
 
-  int amount = ftell(file) + 1;
-  doOrErr(6, fseek(file, 0, SEEK_SET), "Problem z przesuwaniem wskaźnika: %i\n",
+  amount = ftell(file) + 1;
+  doOrErr(5, fseek(file, 0, SEEK_SET), "Problem z przesuwaniem wskaźnika: %i\n",
           errno);
   transfer(amount);
 

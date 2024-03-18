@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -std=c89 -g -Wall #-Werror
+CFLAGS = -O0 -std=c89 -g -Wall -Werror
 LDFLAGS = -O0 -Wall
 
 SRC = main.c
