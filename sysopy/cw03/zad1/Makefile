@@ -1,40 +1,30 @@
 CC = gcc
-CFLAGS = -Wall -O0 -std=c89 -g -Werror
-LDFLAGS = -Wall -O0
+CFLAGS = -O0 -std=c89 -g -Wall #-Werror
+LDFLAGS = -O0 -Wall
 
 SRC = main.c
 BBB = bbb
 BLK = blk
 
-.PHONY: all clean bbb blk obj exe
+.PHONY: all clean bbb blk obj exe byte-test block-test
 
 all: clean obj exe
 
 clean:
-	rm -rf *.o *.so *.a $(BBB) $(BLK)
+	rm -rf *.o *.so *.a $(BBB) $(BLK) *.test *.diff
 
 obj: $(SRC)
 	$(CC) $(CFLAGS) -c $(SRC) -o $(BLK).o
 	$(CC) $(CFLAGS) -c $(SRC) -DBYTE_BY_BYTE -o $(BBB).o
 
-exe: clean
+exe: obj
 	$(CC) $(CFLAGS) $(BLK).o -o $(BLK)
 	$(CC) $(CFLAGS) $(BBB).o -o $(BBB)
 
-# dynamic: obj
-#	$(CC) $(LDFLAGS) -fPIC -shared $(OBJECT) -o $(DYNAMIC)
+byte-test: clean exe
+	./test.sh ./$(BBB) Makefile
+	./test.sh ./$(BBB) main.c
 
-# static: obj
-#	ar crs $(STATIC) $(OBJECT)
-
-# test_static: $(TEST) clean static
-#	$(CC) $(CFLAGS) -c $(TEST)
-#	gcc $(LDFLAGS) $(TESTO) -o $(TEST_STAT) -L. -lcollatz
-
-# test_shared: $(TEST) dynamic
-#	$(CC) $(CFLAGS) -c $(TEST)
-#	gcc $(LDFLAGS) $(TESTO) -o $(TEST_SHR) -L. -lcollatz -Wl,-rpath=`pwd`
-
-# test_dynamic: $(TEST) dynamic
-#	$(CC) $(CFLAGS) -Ddynlib -c $(TEST)
-#	gcc $(LDFLAGS) $(TESTO) -o $(TEST_DYN) -L. -lcollatz -Wl,-rpath=`pwd`
+block-test: clean exe
+	./test.sh ./$(BLK) Makefile
+	./test.sh ./$(BLK) main.c
