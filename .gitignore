@@ -11,6 +11,12 @@
 *_cache*
 *.swp
 *.gz
+*.zip
+.classpath
+**/.gitignore
+.idea/
+.project
+.settings/
 
 *.out
 *.class
