@@ -3,15 +3,16 @@ CFLAGS = -O0 -std=c89 -g -Wall -Werror
 LDFLAGS = -O0 -Wall
 
 SRC = main.c
-BBB = bbb
-BLK = blk
+BBB = bytes
+BLK = blocks
+BENCH_OUT = pomiar_zad_2.txt
 
-.PHONY: all clean bbb blk obj exe byte-test block-test
+.PHONY: all clean obj exe byte-test block-test test bench
 
 all: clean obj exe
 
 clean:
-	rm -rf *.o *.so *.a $(BBB) $(BLK) *.test *.diff
+	rm -rf *.o *.so *.a $(BBB) $(BLK) *.test *.diff 1* 5* pomiar*
 
 obj: $(SRC)
 	$(CC) $(CFLAGS) -c $(SRC) -o $(BLK).o
@@ -28,3 +29,15 @@ byte-test: clean exe
 block-test: clean exe
 	./test.sh ./$(BLK) Makefile
 	./test.sh ./$(BLK) main.c
+
+test: byte-test block-test
+
+bench: clean exe
+	echo > $(BENCH_OUT)
+	./bench.sh ./$(BLK) $(BENCH_OUT)
+	echo ================================================== \
+		>> $(BENCH_OUT)
+	echo >> $(BENCH_OUT)
+	./bench.sh ./$(BBB) $(BENCH_OUT)
+	bat $(BENCH_OUT)
+
