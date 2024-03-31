@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-[ -z "$1" ] && exit 69
+[ ! -d "$1" ] && exit 69
 
 DIR="$(readlink -f $1)"
 TOP="MichalHemperek"
