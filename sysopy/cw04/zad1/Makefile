@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -std=c89 -g -Wall -Wno-variadic-macros -pedantic -Werror
+CFLAGS = -O1 -std=c89 -g -Wall -Wno-variadic-macros -pedantic -Werror
 LDFLAGS = -O0 -Wall -pedantic
 
 SRC = main.c
