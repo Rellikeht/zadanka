@@ -1,14 +1,19 @@
-CXX = gcc
-CFLAGS = -Wall -Wextra -Wuninitialized -g
+CC = gcc
+CFLAGS = -O1 -std=c89 -g -Wall -Wno-variadic-macros -pedantic -Werror
+LDFLAGS = -O0 -Wall -pedantic
 
-.PHONY: all clean
+SRC = main.c
+EXE = main
 
-all: clean run
+.PHONY: all clean obj exe
 
-run: 
-	${CXX} -c ${CFLAGS} main.c
-	${CXX} ${CFLAGS} -o main main.o
+all: clean obj exe
 
 clean:
-	rm -fr main
-	rm -fr main.o
+	rm -rf *.o *.so *.a $(EXE)
+
+obj: $(SRC)
+	$(CC) $(CFLAGS) -c $(SRC) -o $(EXE).o
+
+exe: obj
+	$(CC) $(CFLAGS) $(EXE).o -o $(EXE)
