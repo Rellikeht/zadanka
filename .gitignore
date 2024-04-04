@@ -17,6 +17,7 @@
 .idea/
 .project
 .settings/
+.direnv/
 
 *.out
 *.class

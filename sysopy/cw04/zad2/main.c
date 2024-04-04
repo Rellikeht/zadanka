@@ -6,9 +6,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/* #include<sys/stat.h> */
-/* #include<sys/types.h> */
-
 #define doOrErr(code, op, args...)                                             \
   err = op;                                                                    \
   if (err) {                                                                   \
@@ -27,7 +24,7 @@ int main(int argc, char *argv[]) {
   int child_status, ls_status;
   char *path;
 
-  doOrErr(1, argc != 2, "Zła ilość procesów\n");
+  doOrErr(1, argc != 2, "Zła ilość argumentów\n");
   directory = opendir(argv[1]);
 
   if (directory == NULL) {
@@ -35,43 +32,42 @@ int main(int argc, char *argv[]) {
     path = getcwd(buf, BUFSIZE);
     doOrErr(2, path == NULL, "getcwd() się nie udało, kod błędu: %i\n", errno);
     directory = opendir(path);
-    doOrErr(3, directory == NULL,
+    doOrErr(2, directory == NULL,
             "Nie udało się otworzyć obecnej ścieżki, kod błędu: %i\n", errno);
   } else {
-    strncpy(buf, argv[1], BUFSIZE);
+    /* strncpy(buf, argv[1], BUFSIZE); */
+    path = argv[1];
   }
   printf("Directory path: %s\n", argv[1]);
 
   parent_pid = getpid();
   child_pid = fork();
-  doOrErr(4, child_pid == -1, "Nie udało się wykonać fork(), kod błędu: %i\n",
+  doOrErr(3, child_pid == -1, "Nie udało się wykonać fork(), kod błędu: %i\n",
           errno);
 
   if (child_pid > 0) {
-    printf("Rodzic: \n");
-    printf("pid rodzica: %i, pid dziecka: = %i\n", parent_pid, child_pid);
+    printf("parent process\n");
+    printf("parent pid = %i, child's pid = %i\n", parent_pid, child_pid);
     child_exit_pid = waitpid(child_pid, &child_status, 0);
-    doOrErr(5, child_exit_pid != child_pid,
+    doOrErr(4, child_exit_pid != child_pid,
             "Problem przy waitpid(), kod błędu: %i\n", errno);
-    doOrErr(6, child_status != 0, "Proces potomny zakończył się z kodem %i\n",
-            child_status);
-    printf("Kod wyjściowy procesu potomnego: %d\n", child_status);
-    printf("local rodzica to %i, global rodzica to %i\n", local, global);
+    doOrErr(4, child_status != 0,
+            "Proces potomny zakończył się błędem, kod: %i\n", child_status);
+    printf("Child exit code: %d\n", child_status);
+    printf("parent's local %i, parent's global %i\n", local, global);
 
   } else {
-    printf("Proces potomny:\n");
+    printf("child process\n");
     local++;
     global++;
-    printf("pid procesu potomnego = %i, pid rodzica = %i\n", getpid(),
-           parent_pid);
-    printf("local procesu potomnego to %i, global procesu potomnego to %i\n",
-           local, global);
-    // Tu coś nie gra
-    /* ls_status = execl("/usr/bin/ls", "ls", path, NULL); */
-    ls_status = execl("/usr/bin/ls", path, NULL);
+    printf("child pid = %i, parent pid = %i\n", getpid(), parent_pid);
+    printf("child's local = %i, child's global = %i\n", local, global);
+    /* ls_status = execl("/usr/bin/ls", "ls", path, (char *)NULL); */
+    ls_status = execl("/usr/bin/env", "env", "-S", "ls", path, (char *)NULL);
     return ls_status;
   }
 
-  closedir(directory);
+  err = closedir(directory);
+  doOrErr(5, err != 0, "closedir() się nie udało, kod błędu: %i\n", errno);
   return 0;
 }
