@@ -35,7 +35,6 @@ int main(int argc, char *argv[]) {
     doOrErr(2, directory == NULL,
             "Nie udało się otworzyć obecnej ścieżki, kod błędu: %i\n", errno);
   } else {
-    /* strncpy(buf, argv[1], BUFSIZE); */
     path = argv[1];
   }
   printf("Directory path: %s\n", argv[1]);

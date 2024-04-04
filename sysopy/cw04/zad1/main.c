@@ -32,8 +32,7 @@ int main(int argc, char *argv[]) {
 
   while (true) {
     if (wait(0) == -1) {
-      doOrErr(4, errno != 0 && errno != ECHILD, "Błąd w wait(), jego kod: %i\n",
-              errno);
+      doOrErr(4, errno != ECHILD, "Błąd w wait(), jego kod: %i\n", errno);
       break;
     }
   };
