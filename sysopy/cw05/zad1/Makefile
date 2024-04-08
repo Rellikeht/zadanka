@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -O0 -std=gnu99 -g -Wall -Werror
-LDFLAGS = -O0 -Wall
+CFLAGS = -O2 -std=gnu99 -g -Wall -Werror
+LDFLAGS = -O2 -Wall
 
 SRC = main.c
 EXE = main
