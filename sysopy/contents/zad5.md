@@ -48,7 +48,8 @@ Program w zależności od parametru odpowiednio:
 - instaluje handler obsługujący sygnał (działający w ten sposób,
 że wypisuje komunikat o jego otrzymaniu)
 - maskuje ten sygnał oraz sprawdza czy wiszący/oczekujący sygnał
-jest widoczny. Następnie przy pomocy funkcji raise wysyła sygnał
+jest widoczny.
+Następnie przy pomocy funkcji raise wysyła sygnał
 do samego siebie oraz wykonuje odpowiednie dla danej opcji,
 opisane wyżej działania.
 
