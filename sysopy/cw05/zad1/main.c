@@ -1,5 +1,5 @@
-#include "signal.h"
 #include <errno.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,13 +14,12 @@
 
 int main(int argc, char *argv[]) {
   int err = 0;
-  char *name;
   doOrErr(1, argc != 2, "Zła ilość argumentów\n");
 
   if (arg("none")) {
   } else if (arg("ignore")) {
     /* todo */
-    /* sigaction(); */
+    signal(SIGUSR1, SIG_IGN);
   } else if (arg("handler")) {
     /* todo */
   } else if (arg("mask")) {
