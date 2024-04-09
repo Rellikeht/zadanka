@@ -2,12 +2,15 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
+#define BUFSIZE 2048
 const char *my_name = "catcher";
+char command[BUFSIZE] = {0};
 int err = 0;
 union sigval val = {0};
-pid_t sender_pid = 0;
+pid_t sender_pid = 0, my_pid = 0;
 bool running = true;
 
 void resend(int sig, siginfo_t *info, void *context) {
@@ -52,7 +55,11 @@ int main(int argc, char *argv[]) {
     errp();
     return 1;
   }
-  printf("%s: PID = %i\n", my_name, getpid());
+
+  my_pid = getpid();
+  printf("%s: PID = %i\n", my_name, my_pid);
+  sprintf(command, "echo -n %i | xclip -i -selection clipboard", my_pid);
+  system(command);
 
   while (running) {
     err = sigaction(SIGUSR1, &receive, NULL);

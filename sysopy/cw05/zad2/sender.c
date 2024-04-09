@@ -7,16 +7,33 @@
 const char *my_name = "sender";
 int err = 0;
 union sigval val = {0};
+long catcher_pid = 0;
 
 void receiveConfirmation(int sig, siginfo_t *info, void *context) {
-  printf("%s: Odebrano SIGUSR1\n", my_name);
+  if (catcher_pid == info->si_pid) {
+    printf("%s: Odebrano SIGUSR1 od catchera\n", my_name);
+  } else {
+    eprint("Odebrano SIGUSR1 od innego procesu!\n");
+    err = 1;
+  }
 }
 
 int main(int argc, char *argv[]) {
   char *invalid = 0;
-  long catcher_pid = 0, sig_type = 0;
+  long sig_type = 0;
+  sigset_t usr1mask = {0};
   struct sigaction receive = {0};
 
+  err = sigemptyset(&usr1mask);
+  if (err != 0) {
+    errp();
+    return 1;
+  }
+  err = sigaddset(&usr1mask, SIGUSR1);
+  if (err != 0) {
+    errp();
+    return 1;
+  }
   if (argc != 3) {
     eprint("Zła ilość argumentów\n");
     return 1;
@@ -41,31 +58,31 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  receive.sa_flags = SA_SIGINFO;
+  receive.sa_sigaction = receiveConfirmation;
+  err = sigfillset(&receive.sa_mask);
+  if (err != 0) {
+    errp();
+    return 1;
+  }
+
   err = kill(catcher_pid, SIGUSR1);
   if (err != 0) {
     errp();
     return 2;
   }
 
-  sigfillset(&receive.sa_mask);
-  receive.sa_flags = SA_SIGINFO;
-  receive.sa_sigaction = receiveConfirmation;
+  err = sigsuspend(&usr1mask);
   if (err != 0) {
     errp();
-    return 2;
-  }
-
-  err = pause();
-  if (err != 0) {
-    errp();
-    return 2;
+    return 3;
   }
 
   val.sival_int = sig_type;
   err = sigqueue(catcher_pid, SIGUSR1, val);
   if (err != 0) {
     errp();
-    return 2;
+    return 4;
   }
 
   return 0;
