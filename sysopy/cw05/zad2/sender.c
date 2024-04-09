@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 const char *my_name = "sender";
-int err = 0;
+int err = 0, err2 = 0;
 union sigval val = {0};
 long catcher_pid = 0;
 
@@ -14,7 +14,7 @@ void receiveConfirmation(int sig, siginfo_t *info, void *context) {
     printf("%s: Odebrano SIGUSR1 od catchera\n", my_name);
   } else {
     eprint("Odebrano SIGUSR1 od innego procesu!\n");
-    err = 1;
+    err2 = 1;
   }
 }
 
@@ -24,16 +24,22 @@ int main(int argc, char *argv[]) {
   sigset_t usr1mask = {0};
   struct sigaction receive = {0};
 
-  err = sigemptyset(&usr1mask);
+  err = sigfillset(&usr1mask);
   if (err != 0) {
     errp();
     return 1;
   }
-  err = sigaddset(&usr1mask, SIGUSR1);
+  err = sigdelset(&usr1mask, SIGUSR1);
   if (err != 0) {
     errp();
     return 1;
   }
+  err = sigdelset(&usr1mask, SIGINT);
+  if (err != 0) {
+    errp();
+    return 1;
+  }
+
   if (argc != 3) {
     eprint("Zła ilość argumentów\n");
     return 1;
@@ -77,12 +83,16 @@ int main(int argc, char *argv[]) {
     errp();
     return 3;
   }
+  if (err2 != 0) {
+    errp();
+    return 4;
+  }
 
   val.sival_int = sig_type;
   err = sigqueue(catcher_pid, SIGUSR1, val);
   if (err != 0) {
     errp();
-    return 4;
+    return 5;
   }
 
   return 0;
