@@ -2,14 +2,20 @@
 #include <limits.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 const char *my_name = "sender";
 int err = 0;
 union sigval val = {0};
 
+void receiveConfirmation(int sig, siginfo_t *info, void *context) {
+  printf("%s: Odebrano SIGUSR1\n", my_name);
+}
+
 int main(int argc, char *argv[]) {
   char *invalid = 0;
   long catcher_pid = 0, sig_type = 0;
+  struct sigaction receive = {0};
 
   if (argc != 3) {
     eprint("Zła ilość argumentów\n");
@@ -41,7 +47,19 @@ int main(int argc, char *argv[]) {
     return 2;
   }
 
-  /* TODO odbiór i sprawdzenie */
+  sigfillset(&receive.sa_mask);
+  receive.sa_flags = SA_SIGINFO;
+  receive.sa_sigaction = receiveConfirmation;
+  if (err != 0) {
+    errp();
+    return 2;
+  }
+
+  err = pause();
+  if (err != 0) {
+    errp();
+    return 2;
+  }
 
   val.sival_int = sig_type;
   err = sigqueue(catcher_pid, SIGUSR1, val);
