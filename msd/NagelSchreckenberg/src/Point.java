@@ -4,8 +4,8 @@ public class Point {
   public boolean hasMoved = false;
   public final static int maxVelocity = 5;
   final static double slowDownChance = 0.35;
-  final static double appearChance = 0.05;
-  final static double disappearChance = 0.2;
+  final static double appearChance = 0.0;
+  final static double disappearChance = 0.5;
 
   public Point() { clear(); }
 
@@ -49,8 +49,8 @@ public class Point {
   }
 
   public void moveCar(Point newPoint, boolean exceededPeriodicBoundaries) {
-    if (isCar && !hasMoved && velocity > 0) {
-      if (!exceededPeriodicBoundaries || Math.random() > disappearChance) {
+    if (isCar) { // && !hasMoved && velocity > 0) {
+      if (Math.random() > disappearChance) {
         newPoint.isCar = true;
         newPoint.velocity = velocity;
         newPoint.hasMoved = true;
