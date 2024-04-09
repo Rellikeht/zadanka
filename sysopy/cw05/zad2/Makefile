@@ -7,10 +7,10 @@ LDFLAGS = -O2 -Wall
 all: clean sender catcher
 
 clean:
-	rm -rf *.o *.so *.a $(EXE)
+	rm -rf *.o *.so *.a sender catcher
 
-sender:
+sender: sender.c errors.c
 	$(CC) $(CFLAGS) sender.c -o sender
 
-catcher:
+catcher: sender.c errors.c
 	$(CC) $(CFLAGS) catcher.c -o catcher
