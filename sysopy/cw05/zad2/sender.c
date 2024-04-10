@@ -1,13 +1,16 @@
 #include "errors.c"
+#include <asm-generic/errno-base.h>
+#include <errno.h>
 #include <limits.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 const char *my_name = "sender";
 int err = 0, err2 = 0;
 union sigval val = {0};
-long catcher_pid = 0;
+pid_t catcher_pid = 0;
 
 void receiveConfirmation(int sig, siginfo_t *info, void *context) {
   if (catcher_pid == info->si_pid) {
@@ -22,7 +25,9 @@ int main(int argc, char *argv[]) {
   char *invalid = 0;
   long sig_type = 0;
   sigset_t usr1mask = {0};
+  long pid_tmp = 0;
   struct sigaction receive = {0};
+  errno = 0;
 
   err = sigfillset(&usr1mask);
   if (err != 0) {
@@ -45,15 +50,16 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  catcher_pid = strtol(argv[1], &invalid, 10);
-  if (catcher_pid == LONG_MIN || catcher_pid == LONG_MAX || *invalid != 0) {
+  pid_tmp = strtol(argv[1], &invalid, 10);
+  if (pid_tmp == LONG_MIN || pid_tmp == LONG_MAX || *invalid != 0) {
     eprint("Błąd przy konwersji pidu catchera (argv[1])\n");
     return 1;
-  } else if (catcher_pid < 2) {
+  } else if (pid_tmp < 2) {
     /* 2 bo 1 to init, więc catcher nie może mieć takiego pid */
     eprint("pid catchera (argv[1]) musi być większy od 1\n");
     return 1;
   }
+  catcher_pid = pid_tmp;
 
   sig_type = strtol(argv[2], &invalid, 10);
   if (sig_type == LONG_MIN || sig_type == LONG_MAX || *invalid != 0) {
@@ -63,6 +69,7 @@ int main(int argc, char *argv[]) {
     eprint("Niepoprawny tryb pracy: %li\n", sig_type);
     return 1;
   }
+  val.sival_int = sig_type;
 
   receive.sa_flags = SA_SIGINFO;
   receive.sa_sigaction = receiveConfirmation;
@@ -72,27 +79,32 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  err = kill(catcher_pid, SIGUSR1);
+  err = sigaction(SIGUSR1, &receive, NULL);
   if (err != 0) {
     errp();
     return 2;
   }
 
-  err = sigsuspend(&usr1mask);
+  err = kill(catcher_pid, SIGUSR1);
   if (err != 0) {
     errp();
     return 3;
   }
-  if (err2 != 0) {
+
+  err = sigsuspend(&usr1mask);
+  if (err != -1 && errno != EINTR) {
     errp();
     return 4;
   }
+  if (err2 != 0) {
+    errp();
+    return 5;
+  }
 
-  val.sival_int = sig_type;
   err = sigqueue(catcher_pid, SIGUSR1, val);
   if (err != 0) {
     errp();
-    return 5;
+    return 6;
   }
 
   return 0;
