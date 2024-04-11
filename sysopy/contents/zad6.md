@@ -1,7 +1,7 @@
 # Zadanie 1
 
 Napisz program, który liczy numerycznie wartość całki oznaczonej z funkcji
-4/(x2+1) w przedziale od 0 do 1 metodą prostokątów (z definicji całki oznaczonej
+4/(x^2+1) w przedziale od 0 do 1 metodą prostokątów (z definicji całki oznaczonej
 Riemanna). Pierwszy parametr programu to szerokość każdego prostokąta,
 określająca dokładność obliczeń. Obliczenia należy rozdzielić na n procesów
 potomnych (n drugi parametr wywołania programu), tak by każdy z procesów liczył

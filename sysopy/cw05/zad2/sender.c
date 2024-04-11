@@ -1,5 +1,4 @@
-#include "errors.c"
-#include <asm-generic/errno-base.h>
+#include "errors.h"
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>

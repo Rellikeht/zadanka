@@ -1,4 +1,4 @@
-#include "errors.c"
+#include "errors.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
