@@ -9,8 +9,8 @@ all: clean sender catcher
 clean:
 	rm -rf *.o *.so *.a sender catcher
 
-sender: sender.c errors.c
+sender: sender.c errors.h
 	$(CC) $(CFLAGS) sender.c -o sender
 
-catcher: sender.c errors.c
+catcher: sender.c errors.h
 	$(CC) $(CFLAGS) catcher.c -o catcher
