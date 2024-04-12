@@ -11,6 +11,8 @@ begin
 
 	using HypertextLiteral
 	using Distributions
+	using Base.Threads
+
 	using CairoMakie
 	CairoMakie.activate!(type="png")
 end
@@ -46,6 +48,8 @@ begin
 	struct Bandit
 		e :: Float64
 		k :: Int
+		mean :: Float64
+		stdev :: Float64
 		N :: Vector{Int}
 		Q :: Vector{Float64}
 		A :: Vector{Normal{Float64}}
@@ -57,12 +61,22 @@ begin
 		) = new(
 			e,
 			k,
+			mean,
+			stdev,
 			zeros(k),
 			zeros(k),
 			(m -> Normal(m, stdev)).(rand(Normal(mean, stdev), 10))
 		)
 	end
-	#println(methods(Bandit))
+
+	function clear(bandit::Bandit)
+		dist = Normal(bandit.mean, bandit.stdev)
+		for i in 1:bandit.k
+			bandit.N[i] = 0
+			bandit.Q[i] = 0.0
+			bandit.A[i] = Normal(rand(dist), bandit.stdev)
+		end
+	end
 
 	function getAction(bandit::Bandit)::Int
 		if rand() > bandit.e
@@ -113,15 +127,45 @@ begin
 		epsilons::Float64...
 	)::TestReturn
 		stats = TestReturn(undef, length(epsilons))
+
+		# bandits = Vector{Bandit}(undef, nthreads())
 		for i in eachindex(epsilons)
 			stats[i] = zeros(steps)
-			for _ in 1:runs
-				bandit = Bandit(epsilons[i])
-				rew, _ = train(bandit, steps)
-				stats[i] += rew
+			bandits = Channel{Bandit}(nthreads()+2)
+			# for j in eachindex(bandits)
+			# 	bandits[j] = Bandit(epsilons[i])
+			# end
+			for j in 1:nthreads()
+				put!(bandits, Bandit(epsilons[i]))
 			end
+			svals = Channel{Vector{Float64}}(nthreads()*10)
+			summer = @spawn for _ in 1:runs
+				stats[i] += take!(svals)
+			end
+
+			@threads for j in 1:runs
+				# bandit = bandits[threadid()-1]
+				bandit = take!(bandits)
+				rew, _ = train(bandit, steps)
+				put!(svals, rew)
+				clear(bandit)
+				put!(bandits, bandit)
+			end
+			wait(summer)
 			stats[i] /= runs
 		end
+
+		# @threads for i in eachindex(epsilons)
+		# 	stats[i] = zeros(steps)
+		# 	bandit = Bandit(epsilons[i])
+		# 	for _ in 1:runs
+		# 		rew, _ = train(bandit, steps)
+		# 		stats[i] += rew
+		# 		clear(bandit)
+		# 	end
+		# 	stats[i] /= runs
+		# end
+
 		return stats
 	end
 	function trainEpsilons(runs::Int, epsilons::Float64...)::TestReturn
@@ -135,16 +179,16 @@ begin
 end
 
 # ╔═╡ d7df56ae-ace9-4154-8f73-d0fc40872691
-@time data = trainEpsilons(0.01, 0.05, 0.1, 0.2, 0.5)
-
-# ╔═╡ b91333ac-b5e7-4d30-b7fc-3751950a9b30
-
+begin
+	epsilons = [0.01, 0.25, 0.05, 0.1, 0.25, 0.5]
+	@time data = trainEpsilons(2000, 3000, epsilons...)
+end
 
 # ╔═╡ 940fc907-663e-4029-ac8e-ec934a3f15f9
 @time begin
 	fig2 = Figure(size=(1920,1080))
 	ax = Axis(fig2[1,1])
-	(pts -> lines!(fig2[1,1], pts, label="")).(data)
+	(i -> lines!(fig2[1,1], data[i], label="ε = $(epsilons[i])")).(eachindex(data))
 	axislegend(ax, position=:rb)
 	fig2
 end
@@ -619,9 +663,9 @@ uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[deps.GeoInterface]]
 deps = ["Extents"]
-git-tree-sha1 = "d4f85701f569584f2cff7ba67a137d03f0cfb7d0"
+git-tree-sha1 = "801aef8228f7f04972e596b09d4dba481807c913"
 uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
-version = "1.3.3"
+version = "1.3.4"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "Extents", "GeoInterface", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
@@ -1756,7 +1800,6 @@ version = "3.5.0+0"
 # ╠═3635ec44-f72f-4d96-b0f3-f991a3d366b6
 # ╠═ab088c46-e041-482e-9a73-41ec8175602c
 # ╠═d7df56ae-ace9-4154-8f73-d0fc40872691
-# ╠═b91333ac-b5e7-4d30-b7fc-3751950a9b30
 # ╠═940fc907-663e-4029-ac8e-ec934a3f15f9
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
