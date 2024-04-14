@@ -6,8 +6,10 @@ public class Point {
   public final static double slowDownChance = 0.5;
   // final static double appearChance = 0.0;
   // final static double disappearChance = 0.0;
-  final static double appearChance = 0.03;
-  final static double disappearChance = 0.15;
+  // final static double appearChance = 0.03;
+  // final static double disappearChance = 0.15;
+  final static double appearChance = 0.05;
+  final static double disappearChance = 0.05;
 
   final static int l_gap = 3;
   final static int l_lead = 3;
