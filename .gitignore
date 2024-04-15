@@ -28,3 +28,4 @@
 sysopy/**/*.test
 sysopy/**/*.diff
 sysopy/**/pomiar*
+!sysopy/kolosy/**/file*
