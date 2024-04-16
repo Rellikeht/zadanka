@@ -55,7 +55,6 @@ public class Board
 
   private void initialize(int length, int height) {
     boolean Moore = false;
-
     points = new Point[length][height];
 
     for (int x = 0; x < points.length; ++x)
