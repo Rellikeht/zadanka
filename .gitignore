@@ -29,3 +29,6 @@ sysopy/**/*.test
 sysopy/**/*.diff
 sysopy/**/pomiar*
 !sysopy/kolosy/**/file*
+sysopy/**/results*
+sysopy/**/test*
+!sysopy/**/test*.sh

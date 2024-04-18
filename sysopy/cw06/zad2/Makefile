@@ -4,18 +4,13 @@ LDFLAGS = -O2 -Wall
 
 SRC = main.c
 EXE = main
-TESTS = ./tests.sh
 
 .PHONY: all clean exe
 
-all: clean exe tests
+all: clean exe
 
 clean:
 	rm -rf *.o *.so *.a $(EXE)
 
 exe: $(SRC)
 	$(CC) $(CFLAGS) $(SRC) -o $(EXE)
-
-tests: exe $(TESTS)
-	@ echo
-	@ $(TESTS)

@@ -6,10 +6,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define BUFSIZE 20
 #define TRUEVAL 3.141592653589793
 
-static inline double fun(double x) { return 4 / (x * x + 1); }
+static inline double f(double x) { return 4 / (x * x + 1); }
 
 int main(int argc, char *argv[]) {
     errno = 0;
@@ -19,7 +18,7 @@ int main(int argc, char *argv[]) {
     double sum = 0, a = 0, b = 0;
 
     if (argc != 3) {
-        fprintf(stderr, "Liczba argumentów powinna wynosić 3\n");
+        fprintf(stderr, "Liczba argumentów powinna wynosić 2\n");
         return 1;
     }
 
@@ -49,7 +48,7 @@ int main(int argc, char *argv[]) {
         b = (double)(i + 1) / (double)processes;
 
         err = pipe(pipes[i]);
-        if (child == -1) {
+        if (err != 0) {
             perror("pipe()");
             return 1;
         }
@@ -78,7 +77,7 @@ int main(int argc, char *argv[]) {
         }
 
         while (a < b) {
-            sum += fun(a + w2) * width;
+            sum += f(a + w2) * width;
             a += width;
         }
 
