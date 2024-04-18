@@ -8,11 +8,14 @@ find "$DIR" -mindepth 1 -maxdepth 1 -type d -print0 |
 
 TOP="MichalHemperek"
 TEMP=$(mktemp -d)
-cd "$TEMP"
+TNAME="02_$TOP-$1.tar.gz"
 
+rm -f "$TNAME"
+cd "$TEMP"
 mkdir "$TOP"
+
 cp -r "$DIR" "$TOP"
-tar czf "02_$TOP-$1.tar.gz" "$TOP"
+tar czf "$TNAME" "$TOP"
 
 mv *.gz "$DIR/.."
 cd "$DIR"
