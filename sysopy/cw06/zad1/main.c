@@ -16,14 +16,14 @@ int main(int argc, char *argv[]) {
 
     int i = 0;
     pid_t child = 0;
-    double sum = 0, a = 0, b = 0;
+    double sum = 0, a = 0; //, b = 0;
 
     if (argc != 3) {
         fprintf(stderr, "Liczba argumentów powinna wynosić 3\n");
         return 1;
     }
 
-    const double width = strtod(argv[2], NULL);
+    const double width = strtod(argv[1], NULL);
     if (width == 0) {
         fprintf(stderr, "Błąd przy konwersji argv[1] (szerokość prostokąta)\n");
         return 1;
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Błąd przy konwersji argv[2] (ilości procesów)\n");
         return 1;
     } else if (processes < 1) {
-        fprintf(stderr, "Ilość procesów (argv[1]) musi być większa od 0\n");
+        fprintf(stderr, "Ilość procesów (argv[2]) musi być większa od 0\n");
         return 1;
     }
     int pipes[processes][2];
@@ -46,11 +46,14 @@ int main(int argc, char *argv[]) {
     // TODO pipe
 
     for (i = 0; i < processes; i++) {
+        err = pipe(pipes[i]);
+
         child = fork();
         if (child == -1) {
             perror("fork()");
             return 1;
         }
+
         if (child != 0) {
             err = close(pipes[i][1]);
             if (err == -1) {
@@ -60,6 +63,23 @@ int main(int argc, char *argv[]) {
             }
             continue;
         }
+
+        err = close(pipes[i][0]);
+        if (err == -1) {
+            fprintf(stderr, "Child, read pipe %i: ", i);
+            perror("close()");
+            return 1;
+        }
+
+        printf("Child %i\n", i);
+
+        err = close(pipes[i][1]);
+        if (err == -1) {
+            fprintf(stderr, "Child, write pipe %i: ", i);
+            perror("close()");
+            return 1;
+        }
+        return 0;
     }
 
     while (true) {
@@ -93,6 +113,8 @@ int main(int argc, char *argv[]) {
                     i);
             return 1;
         }
+
+        sum += a;
     }
 
     printf("Wartość całki: %lf\n", sum);

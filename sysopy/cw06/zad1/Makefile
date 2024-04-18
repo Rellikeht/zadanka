@@ -1,6 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -std=c89 -g -Wall -Wextra -Werror -Wno-variadic-macros
-# gnu99
+CFLAGS = -O0 -std=gnu99 -g -Wall -Wextra -Werror -Wno-variadic-macros
 LDFLAGS = -O0 -Wall
 
 SRC = main.c
