@@ -5,11 +5,13 @@
 #include <unistd.h>
 
 int main(int argc, char *argv[]) {
-    char *invalid;
-    int i       = 0;
+    errno = 0;
+    char *invalid = NULL;
+    int err = 0;
+
+    int i = 0;
     pid_t child = 0;
-    double sum  = 0;
-    errno       = 0;
+    double sum = 0;
 
     if (argc != 3) {
         fprintf(stderr, "Liczba argumentów powinna wynosić 3\n");
@@ -40,6 +42,12 @@ int main(int argc, char *argv[]) {
     for (i = 0; i < processes; i++) {
         child = fork();
         if (child == -1) {
+            perror("fork()");
+            return 1;
+        }
+        if (child != 0) {
+            // parent
+            continue;
         }
     }
 
