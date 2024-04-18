@@ -7,16 +7,16 @@
 #include <unistd.h>
 
 #define BUFSIZE 20
+#define TRUEVAL 3.141592653589793
+
+static inline double fun(double x) { return 4 / (x * x + 1); }
 
 int main(int argc, char *argv[]) {
     errno = 0;
     char *invalid = NULL;
-    char buf[BUFSIZE + 1] = {0};
-    int err = 0;
-
-    int i = 0;
+    int err = 0, i = 0, bytes = 0;
     pid_t child = 0;
-    double sum = 0, a = 0; //, b = 0;
+    double sum = 0, a = 0, b = 0;
 
     if (argc != 3) {
         fprintf(stderr, "Liczba argumentów powinna wynosić 3\n");
@@ -32,6 +32,7 @@ int main(int argc, char *argv[]) {
                 "Szerokość prostokąta (argv[1]) musi być większa od 0\n");
         return 1;
     }
+    const double w2 = width / 2;
 
     const long processes = strtol(argv[2], &invalid, 10);
     if (processes == LONG_MIN || processes == LONG_MAX || *invalid != 0) {
@@ -43,10 +44,15 @@ int main(int argc, char *argv[]) {
     }
     int pipes[processes][2];
 
-    // TODO pipe
-
     for (i = 0; i < processes; i++) {
+        a = (double)i / (double)processes;
+        b = (double)(i + 1) / (double)processes;
+
         err = pipe(pipes[i]);
+        if (child == -1) {
+            perror("pipe()");
+            return 1;
+        }
 
         child = fork();
         if (child == -1) {
@@ -71,7 +77,17 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        printf("Child %i\n", i);
+        while (a < b) {
+            sum += fun(a + w2) * width;
+            a += width;
+        }
+
+        bytes = write(pipes[i][1], &sum, sizeof(sum));
+        if (bytes == -1) {
+            fprintf(stderr, "Child %i: ", i);
+            perror("write()");
+            return 1;
+        }
 
         err = close(pipes[i][1]);
         if (err == -1) {
@@ -85,7 +101,7 @@ int main(int argc, char *argv[]) {
     while (true) {
         if (wait(0) == -1) {
             if (errno != ECHILD) {
-                perror("wait()"); // ???
+                perror("wait()");
                 return 1;
             }
             break;
@@ -93,8 +109,8 @@ int main(int argc, char *argv[]) {
     }
 
     for (i = 0; i < processes; i++) {
-        err = read(pipes[i][0], buf, BUFSIZE);
-        if (err == -1) {
+        bytes = read(pipes[i][0], &a, sizeof(sum));
+        if (bytes == -1) {
             fprintf(stderr, "Parent, read pipe %i: ", i);
             perror("read()");
             return 1;
@@ -107,16 +123,10 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        a = strtod(buf, &invalid);
-        if (invalid != NULL) {
-            fprintf(stderr, "Parent, read pipe %i: Invalid double to parse\n",
-                    i);
-            return 1;
-        }
-
         sum += a;
     }
 
-    printf("Wartość całki: %lf\n", sum);
+    printf("Obliczona wartość całki:   %.015f\n", sum);
+    printf("Rzeczywista wartość całki: %.015f\n", TRUEVAL);
     return 0;
 }
