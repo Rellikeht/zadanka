@@ -2,11 +2,11 @@
 Language:        Cpp
 BasedOnStyle:  LLVM
 AccessModifierOffset: -2
-AlignAfterOpenBracket: Align
-AlignArrayOfStructures: None
-AlignConsecutiveMacros: None
+AlignAfterOpenBracket: BlockIndent # Align
+AlignArrayOfStructures: Left
+AlignConsecutiveMacros: AcrossComments
 AlignConsecutiveAssignments: None
-AlignConsecutiveBitFields: None
+AlignConsecutiveBitFields: AcrossComments
 AlignConsecutiveDeclarations: None
 AlignEscapedNewlines: Right
 AlignOperands:   Align
@@ -26,8 +26,8 @@ AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: MultiLine
 AttributeMacros:
   - __capability
-BinPackArguments: true
-BinPackParameters: true
+BinPackArguments: false
+BinPackParameters: false
 BraceWrapping:
   AfterCaseLabel:  false
   AfterClass:      false
@@ -106,7 +106,7 @@ IndentExternBlock: AfterExternBlock
 IndentRequires:  false
 IndentWidth:     4
 IndentWrappedFunctionNames: false
-InsertTrailingCommas: None
+InsertTrailingCommas: Wrapped
 JavaScriptQuotes: Leave
 JavaScriptWrapImports: true
 KeepEmptyLinesAtTheStartOfBlocks: true
