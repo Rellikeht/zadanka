@@ -1,12 +1,12 @@
-#include <errno.h>
-#include <stdio.h>
+#include <unistd.h>
+#include "common.c"
 
 int main() {
     int err = 0, bytes = 0;
-    double result = 0, a = 0, b = 0;
+    pipes ps = {0};
+    double sum = 0, a = 0, b = 0;
     errno = 0;
 
-    // WEJŚCIE
     err = scanf("%lf %lf", &a, &b);
     if (err == EOF) {
     } else if (err < 2) {
@@ -17,28 +17,33 @@ int main() {
         return 1;
     }
 
-    // WYSYŁANIE
-    bytes = write(input[1], &a, sizeof(sum));
-    if (bytes == -1) {
-        fprintf(stderr, "Proces główny, a: ");
-        perror("write()");
-        return 1;
-    }
-    bytes = write(input[1], &b, sizeof(sum));
-    if (bytes == -1) {
-        fprintf(stderr, "Proces główny, b: ");
-        perror("write()");
+    ps = openPipes();
+    if (ps.error != 0) {
         return 1;
     }
 
-    // ODCZYT
-    bytes = read(output[0], &sum, sizeof(sum));
+    printf("Opened\n");
+    bytes = write(ps.input, &a, sizeof(a));
     if (bytes == -1) {
-        fprintf(stderr, "Proces główny: ");
-        perror("read()");
+        /* fprintf(stderr, "Proces główny, a: "); */
+        perror("input pipe write");
+        return 1;
+    }
+    bytes = write(ps.input, &b, sizeof(b));
+    if (bytes == -1) {
+        /* fprintf(stderr, "Proces główny, b: "); */
+        perror("input pipe write");
         return 1;
     }
 
-    printf("Obliczona wartość całki: %.015f\n", result);
-    return 0;
+    printf("Written\n");
+    bytes = read(ps.output, &sum, sizeof(sum));
+    if (bytes == -1) {
+        /* fprintf(stderr, "Proces główny: "); */
+        perror("output pipe read");
+        return 1;
+    }
+
+    printf("Obliczona wartość całki: %.015f\n", sum);
+    return closePipes(&ps);
 }

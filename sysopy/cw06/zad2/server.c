@@ -1,22 +1,51 @@
-#include <errno.h>
-#include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-static inline double f(double x) { return 4 / (x * x + 1); }
+#include "common.c"
 
 #define WIDTH = 0.0001
+static inline double f(double x) { return 4 / (x * x + 1); }
+
+int createPipes() {
+    int err = 0;
+    err = mkfifo(INPUT_PIPE, S_IRWXU);
+    if (err != 0) {
+        perror("input pipe creation");
+        return 1;
+    }
+
+    err = mkfifo(OUTPUT_PIPE, S_IRWXU);
+    if (err != 0) {
+        perror("output pipe creation");
+        err = unlink(INPUT_PIPE);
+        if (err != 0) {
+            perror("input pipe destruction");
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
+int destroyPipes() {
+    int err = 0, errb = 0;
+    err = unlink(INPUT_PIPE);
+    if (err != 0) {
+        perror("input pipe destruction");
+        errb  = 1;
+    }
+    err = unlink(OUTPUT_PIPE);
+    if (err != 0) {
+        perror("output pipe destruction");
+        errb += 1;
+    }
+    return errb;
+}
 
 int main(int argc, char *argv[]) {
-    // ZMIENNE
-    errno = 0;
     int err = 0, bytes = 0;
+    pipes ps = {0};
     double sum = 0, a = 0, b = 0;
-    int input[2], output[2];
+    errno = 0;
 
-    // ARGUMENTY
     if (argc != 2) {
         fprintf(stderr, "Liczba argumentów powinna wynosić 1\n");
         return 1;
@@ -32,98 +61,48 @@ int main(int argc, char *argv[]) {
     }
     const double w2 = width / 2;
 
-    // PIPY
-    err = pipe(input);
+    err = createPipes();
     if (err != 0) {
-        perror("input pipe()");
-        return 1;
-    }
-    err = pipe(output);
-    if (err != 0) {
-        perror("output pipe()");
+        destroyPipes();
         return 1;
     }
 
-    err = close(input[1]);
-    if (err == -1) {
-        fprintf(stderr, "Proces potomny, wejście (nadmiarowe): ");
-        perror("close()");
+    printf("Created\n");
+    ps = openPipes();
+    if (ps.error != 0) {
         return 1;
     }
-    err = close(output[0]);
-    if (err == -1) {
-        fprintf(stderr, "Proces potomny, wyjście (nadmiarowe): ");
-        perror("close()");
-        return 1;
-    }
+    printf("Opened\n");
 
-    // ODBIERANIE
-    bytes = read(input[0], &a, sizeof(sum));
+    bytes = read(ps.input, &a, sizeof(a));
     if (bytes == -1) {
-        fprintf(stderr, "Proces potomny, a: ");
-        perror("read()");
+        fprintf(stderr, "Proces główny, a: ");
+        perror("input pipe read");
         return 1;
     }
-    bytes = read(input[0], &b, sizeof(sum));
+    bytes = read(ps.input, &b, sizeof(b));
     if (bytes == -1) {
-        fprintf(stderr, "Proces potomny, b: ");
-        perror("read()");
+        fprintf(stderr, "Proces główny, b: ");
+        perror("input pipe read");
         return 1;
     }
 
-    // CAŁKA
     while (a < b) {
         sum += f(a + w2) * width;
         a += width;
     }
 
-    // ZAPIS
-    bytes = write(output[1], &sum, sizeof(sum));
+    printf("Calculated\n");
+    bytes = write(ps.output, &sum, sizeof(sum));
     if (bytes == -1) {
-        fprintf(stderr, "Proces potomny: ");
-        perror("read()");
+        fprintf(stderr, "Proces główny: ");
+        perror("output pipe write");
         return 1;
     }
 
-    err = close(input[0]);
-    if (err == -1) {
-        fprintf(stderr, "Proces potomny, wejście: ");
-        perror("close()");
-        return 1;
-    }
-    err = close(output[1]);
-    if (err == -1) {
-        fprintf(stderr, "Proces potomny, wyjście: ");
-        perror("close()");
-        return 1;
-    }
-    return 0;
-
-    err = close(input[0]);
-    if (err == -1) {
-        fprintf(stderr, "Proces głowny, wejście (nadmiarowe): ");
-        perror("close()");
-        return 1;
-    }
-    err = close(output[1]);
-    if (err == -1) {
-        fprintf(stderr, "Proces głowny, wyjście (nadmiarowe): ");
-        perror("close()");
-        return 1;
-    }
-
-    err = close(input[1]);
-    if (err == -1) {
-        fprintf(stderr, "Proces głowny, wejście (nadmiarowe): ");
-        perror("close()");
-        return 1;
-    }
-    err = close(output[0]);
-    if (err == -1) {
-        fprintf(stderr, "Proces głowny, wyjście (nadmiarowe): ");
-        perror("close()");
-        return 1;
-    }
-
-    return 0;
+    printf("Closing\n");
+    /* err = closePipes(&ps); */
+    closePipes(&ps);
+    // TODO błędy
+    return destroyPipes();
 }
