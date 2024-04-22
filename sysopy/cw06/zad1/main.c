@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     int pipes[processes][2];
 
     for (i = 0; i < processes; i++) {
-        a = (double)i / (double)processes;
+        a = b;
         b = (double)(i + 1) / (double)processes;
 
         err = pipe(pipes[i]);
@@ -76,8 +76,9 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
+        a += w2;
         while (a < b) {
-            sum += f(a + w2) * width;
+            sum += f(a) * width;
             a += width;
         }
 

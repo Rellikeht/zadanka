@@ -22,28 +22,22 @@ int main() {
         return 1;
     }
 
-    printf("Opened\n");
     bytes = write(ps.input, &a, sizeof(a));
     if (bytes == -1) {
-        /* fprintf(stderr, "Proces główny, a: "); */
         perror("input pipe write");
         return 1;
     }
     bytes = write(ps.input, &b, sizeof(b));
     if (bytes == -1) {
-        /* fprintf(stderr, "Proces główny, b: "); */
         perror("input pipe write");
         return 1;
     }
 
-    printf("Written\n");
     bytes = read(ps.output, &sum, sizeof(sum));
     if (bytes == -1) {
-        /* fprintf(stderr, "Proces główny: "); */
         perror("output pipe read");
         return 1;
     }
 
-    printf("Obliczona wartość całki: %.015f\n", sum);
     return closePipes(&ps);
 }

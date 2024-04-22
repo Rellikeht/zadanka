@@ -67,12 +67,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Created\n");
     ps = openPipes();
     if (ps.error != 0) {
         return 1;
     }
-    printf("Opened\n");
 
     bytes = read(ps.input, &a, sizeof(a));
     if (bytes == -1) {
@@ -92,7 +90,6 @@ int main(int argc, char *argv[]) {
         a += width;
     }
 
-    printf("Calculated\n");
     bytes = write(ps.output, &sum, sizeof(sum));
     if (bytes == -1) {
         fprintf(stderr, "Proces główny: ");
@@ -100,9 +97,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Closing\n");
-    /* err = closePipes(&ps); */
-    closePipes(&ps);
-    // TODO błędy
-    return destroyPipes();
+    err = closePipes(&ps);
+    return destroyPipes() + 4*err;
 }

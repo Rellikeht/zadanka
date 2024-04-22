@@ -8,13 +8,13 @@ TESTS = ./tests.sh
 
 .PHONY: all clean exe
 
+exe: $(SRC)
+	$(CC) $(CFLAGS) $(SRC) -o $(EXE)
+
 all: clean exe tests
 
 clean:
 	rm -rf *.o *.so *.a $(EXE)
-
-exe: $(SRC)
-	$(CC) $(CFLAGS) $(SRC) -o $(EXE)
 
 tests: exe $(TESTS)
 	@ echo
