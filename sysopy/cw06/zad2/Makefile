@@ -11,6 +11,9 @@ SEXE = server
 
 all: clean exe
 
+rmpipes:
+	sed -En 's/.*"([^"]*)"$\/\1/p' config.h | xargs -d '\n' rm -f 
+
 clean:
 	rm -rf *.o *.so *.a $(SEXE) $(CEXE)
 

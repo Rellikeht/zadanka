@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-#include "protocol_specs.h"
+#include "config.h"
 
 int main() {
     struct mq_attr attributes = {
@@ -46,7 +46,8 @@ int main() {
 
             message_t send_message = {
                 .type = IDENTIFIER,
-                .identifier = registered_clients};
+                .identifier = registered_clients
+            };
 
             mq_send(
                 client_queues[registered_clients],

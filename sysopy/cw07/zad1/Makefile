@@ -14,6 +14,10 @@ all: clean exe
 clean:
 	rm -rf *.o *.so *.a $(SEXE) $(CEXE)
 
-exe: $(CSRC) $(SSRC)
-	$(CC) $(CFLAGS) $(SSRC) -o $(SEXE)
+client: $(CSRC)
 	$(CC) $(CFLAGS) $(CSRC) -o $(CEXE)
+
+server:$(SSRC)
+	$(CC) $(CFLAGS) $(SSRC) -o $(SEXE)
+
+exe: client server
