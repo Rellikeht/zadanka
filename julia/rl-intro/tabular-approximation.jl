@@ -4,19 +4,20 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 79a37bd1-4f04-48e9-8587-ed0adb1e143a
+# ╔═╡ 68b9c8d4-02ed-11ef-190e-d74c5b3aef27
 begin
     using Pkg
-    Pkg.update()
+    Pkg.update(io=devnull)
 
     using HypertextLiteral
     using Distributions
     using Base.Threads
     using BenchmarkTools
+    using Match
 
     using CairoMakie
     CairoMakie.activate!(type="png")
-	
+    
     @htl """
     <style>
     pluto-cell {
@@ -33,239 +34,138 @@ begin
     """
 end
 
-# ╔═╡ c72ea6db-41d5-493c-9d76-30690e5795dc
+# ╔═╡ d56a7532-86a0-4775-82ae-33d3b27961e5
 begin
-    const defaultK = 10
-    const defaultMean = 5.0
-    const defaultStdev = 2.0
-    const defaultE = 0.1
-    const defaultSteps = 1000
-    const defaultRuns = 2000
+    const board_row::String = "---+---+---"
 
-    struct Bandit
-        e :: Float64
-        k :: Int
-        mean :: Float64
-        stdev :: Float64
-        N :: Vector{Int}
-        Q :: Vector{Float64}
-        A :: Vector{Normal{Float64}}
-        Bandit(
-            e::Float64=defaultE,
-            k::Int=defaultK,
-            mean::Float64=defaultMean,
-            stdev::Float64=defaultStdev
+    @enum BoardStateVal X O E
+	mutable struct BoardState
+		player::BoardStateVal
+		winner::BoardStateVal
+	end
+	const defaultBoardState = BoardState(X, E)
+	const BoardContent = Array{BoardStateVal,2}
+    struct Board
+        content::BoardContent
+		state::BoardState
+        Board(
+            content::Array{BoardStateVal,2}=[[E E E];[E E E];[E E E]],
+			state::BoardState=defaultBoardState
         ) = new(
-            e,
-            k,
-            mean,
-            stdev,
-            zeros(k),
-            zeros(k),
-            (m -> Normal(m, stdev)).(rand(Normal(mean, stdev), 10))
+            content,
+			state
         )
+	end
+
+    function Base.getindex(b::Board, i1::Int, i2::Int)::BoardStateVal
+        return b.content[i1, i2]
+    end
+    function Base.getindex(b::Board, i1::Int)::BoardStateVal
+        return b.content[i1]
+    end
+    function Base.getindex(b::Board, I...)
+        return b.content[I...]
+    end
+    function Base.setindex!(b::Board, x::BoardStateVal, i1::Int, i2::Int, I::Int...)
+        b.content[i1, i2] = x
+    end
+    function Base.setindex!(b::Board, x::BoardStateVal, i1::Int)
+        b.content[i1] = x
+    end
+	function switchSide(b::Board)
+		b.state.player = @match b.state.player begin
+			$X => O
+			$O => X
+			_ => throw(ErrorException("Cannot switch side"))
+		end
+	end
+    begin
+        precompB = Board()
+        _ = precompB[1,2]
+        _ = precompB[2,:]
+        precompB[2,2] = X
+		switchSide(precompB)
     end
 
-    function clear(bandit::Bandit)
-        dist = Normal(bandit.mean, bandit.stdev)
-        for i in 1:bandit.k
-            bandit.N[i] = 0
-            bandit.Q[i] = 0.0
-            bandit.A[i] = Normal(rand(dist), bandit.stdev)
+    function str(st::BoardStateVal)::String
+        return @match st begin
+            $X => "X"
+            $O => "O"
+            $E => " "
         end
     end
-
-    function getAction(bandit::Bandit)::Int
-        if rand() > bandit.e
-            return argmax(bandit.Q)
-        else
-            return rand(1:bandit.k)
-        end
+    function str(b::Board)::String
+        s::String = " " * join(str.(b[1,:]), " | ") * " \n" * board_row * "\n"
+        s *= " " * join(str.(b[2,:]), " | ") * "\n" * board_row * " \n"
+        s *= " " * join(str.(b[3,:]), " | ") * " "
+        return s
     end
-    function step(bandit::Bandit, action::Int)::Float64
-        rand(bandit.A[action])
+    begin
+        _ = str(X)
+        _ = str(precompB)
     end
 
-    function train(bandit::Bandit, steps::Int=defaultSteps)::Tuple{Vector{Float64},Vector{Int}}
-        rewards = Vector{Float64}(undef, steps)
-        trajectory = Vector{Int}(undef, steps)
-        for i in 1:steps
-            a = getAction(bandit)
-            r = step(bandit,a)
-            rewards[i] = r
-            trajectory[i] = a
-            bandit.N[a] += 1
-            bandit.Q[a] += (r-bandit.Q[a])/bandit.N[a]
-        end
-        return rewards, trajectory
-    end
-    @time _ = train(Bandit(), 10)
-end
+	function playable(b::Board)::Bool
+		return b.state.winner == E
+	end
+	function allowedMoves(b::Board)::Vector{Int}
+		return map(first, (filter(i -> b.content[i] == E, eachindex(b.content))))
+	end
+	function checkWin(b::Board)::Bool
+		# [(0,1,2), (3,4,5), (6,7,8), (0,3,6), (1,4,7), (2,5,8), (0,4,8), (2,4,6)]
+		return false
+	end
+	function makeMove(b::Board, i::Int, j::Int...)
+		if b.content[i, j...] == X || b.content[i, j...] == O
+			throw(ErrorException("Cannot move to already occupied position"))
+		end
+		b.content[i, j...] = b.state.player
+		if count(i -> b.content[i] == E, eachindex(b.content)) == 0
+			b.state.player = E
+		elseif checkWin(b)
+			b.state.winner = b.state.player
+			b.state.player = E
+		else
+			switchSide(b)
+		end
+	end
+	begin
+		_ = playable(precompB)
+		_ = allowedMoves(precompB)
+		_ = checkWin(precompB)
+		makeMove(precompB, 2)
+		println(str(precompB))
+	end
 
-# ╔═╡ 993212eb-f32e-42a8-975e-b230d4d92ba5
-begin
-    b = Bandit()
-    @time rew, traj = train(b)
     md"""
     """
 end
 
-# ╔═╡ 3635ec44-f72f-4d96-b0f3-f991a3d366b6
-@time begin
-    fig1 = Figure(size=(2560,2160))
-    lines(fig1[1,1], rew)
-    scatter(fig1[2,1], traj)
-    fig1
-end
+# ╔═╡ 37aca826-373d-4969-902b-b11a35c1d9f5
+# begin
+# 	const precompPS = pairs(precompB.content)
+# 	for (i, j) in precompPS
+# 		println(i, " ", j)
+# 	end
+# 	println(precompPS[1])
+# 	println(precompPS[5])
+# end
 
-# ╔═╡ ab088c46-e041-482e-9a73-41ec8175602c
+# ╔═╡ b16bbffd-bc8f-4685-a10e-8f980515a8bb
 begin
-    const TestReturn = Vector{Vector{Float64}}
-
-    function trainEpsilons(
-        runs::Int,
-        steps::Int,
-        epsilons::Float64...
-    )::TestReturn
-        stats = TestReturn(undef, length(epsilons))
-
-        for i in eachindex(epsilons)
-            stats[i] = zeros(steps)
-            bandits = Channel{Bandit}(nthreads()+2)
-            for j in 1:nthreads()
-                put!(bandits, Bandit(epsilons[i]))
-            end
-            svals = Channel{Vector{Float64}}(nthreads()*10)
-            summer = @spawn for _ in 1:runs
-                stats[i] += take!(svals)
-            end
-
-            @threads for j in 1:runs
-                bandit = take!(bandits)
-                rew, _ = train(bandit, steps)
-                put!(svals, rew)
-                clear(bandit)
-                put!(bandits, bandit)
-            end
-            wait(summer)
-            stats[i] /= runs
-        end
-        return stats
+    struct Agent
     end
-
-    function trainEpsilons(runs::Int, epsilons::Float64...)::TestReturn
-        steps = @isdefined(steps) ? steps : defaultSteps
-        trainEpsilons(runs, steps, epsilons...)
-    end
-    function trainEpsilons(epsilons::Float64...)::TestReturn
-        runs = @isdefined(runs) ? runs : defaultRuns
-        trainEpsilons(runs, epsilons...)
-    end
-
-    @time _ = trainEpsilons(10, 10, 0.1)
 end
 
-# ╔═╡ 940fc907-663e-4029-ac8e-ec934a3f15f9
-begin
-    epsilons = [0.01, 0.02, 0.05, 0.1, 0.25, 0.5]
-    @time data = trainEpsilons(2000, 3000, epsilons...)
-	@time begin
-    	fig2 = Figure(size=(1920,1080))
-    	ax2 = Axis(fig2[1,1])
-    	(i -> lines!(
-			fig2[1,1],
-			data[i],
-			label="ε = $(epsilons[i])")
-		).(eachindex(data))
-    	axislegend(ax2, position=:rb)
-    	fig2
-	end
-end
-
-# ╔═╡ 812cc755-3ca9-405e-86b4-4ef2d12e3c64
-begin
-    function trainEpsilonsSerial(
-        runs::Int,
-        steps::Int,
-        epsilons::Float64...
-    )::TestReturn
-        stats = TestReturn(undef, length(epsilons))
-        for i in eachindex(epsilons)
-            stats[i] = zeros(steps)
-            bandit = Bandit(epsilons[i])
-            for _ in 1:runs
-                rew, _ = train(bandit, steps)
-                stats[i] += rew
-                clear(bandit)
-            end
-            stats[i] /= runs
-        end
-        return stats
-    end
-    @time _ = trainEpsilonsSerial(10, 10, 0.1)
-    @time serial_data = trainEpsilonsSerial(2000, 3000, 0.05)
-	@time begin
-    	fig3 = Figure(size=(1920,1080))
-    	ax3 = Axis(fig3[1,1])
-    	lines!(fig3[1,1], serial_data[1])
-    	fig3
-	end
-end
-
-# ╔═╡ e7045435-6c74-4501-bc45-3e22d2b28079
-begin
-    function trainEpsilonsEpsThr(
-        runs::Int,
-        steps::Int,
-        epsilons::Float64...
-    )::TestReturn
-        stats = TestReturn(undef, length(epsilons))
-        @threads for i in eachindex(epsilons)
-            stats[i] = zeros(steps)
-            bandit = Bandit(epsilons[i])
-            for _ in 1:runs
-                rew, _ = train(bandit, steps)
-                stats[i] += rew
-                clear(bandit)
-            end
-            stats[i] /= runs
-        end
-        return stats
-    end
-    @time _ = trainEpsilonsEpsThr(10, 20, 0.1)
-end
-
-# ╔═╡ 8544ea00-a4f2-410f-a23d-621d9bdc3b89
-begin
-    function trainEpsilonsBanditVec(
-        runs::Int,
-        steps::Int,
-        epsilons::Float64...
-    )::TestReturn
-        stats = TestReturn(undef, length(epsilons))
-        bandits = Vector{Bandit}(undef, Threads.maxthreadid()+1)
-        svals = Vector{Vector{Float64}}(undef, runs)
-        for i in eachindex(epsilons)
-            stats[i] = zeros(steps)
-            for j in eachindex(bandits)
-                bandits[j] = Bandit(epsilons[i])
-            end
-            summer = @spawn for _ in 1:runs
-                stats[i] += take!(svals)
-            end
-
-            @threads for j in 1:runs
-                bandit = bandits[threadid()]
-                rew, _ = train(bandit, steps)
-                svals[j] = rew
-                clear(bandit)
-            end
-            stats[i] = sum(svals)/runs
-        end
-        return stats
-    end
-    @time _ = trainEpsilonsBanditVec(10, 20, 0.1)
-end
+# ╔═╡ bfddc876-f682-42be-a592-20d4781a0de3
+    # function BoardStateVal(sym::Symbol)
+    #   @match sym begin
+    #       :x,:X => X
+    #       :o,:O => O
+    #       :e,:E => E
+    #       _ => throw(ErrorException("Invalid state"))
+    #   end
+    # end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -274,13 +174,15 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+Match = "7eb4fadd-790c-5f42-8a69-bfa0b872bfbf"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
 [compat]
 BenchmarkTools = "~1.5.0"
 CairoMakie = "~0.11.10"
-Distributions = "~0.25.107"
+Distributions = "~0.25.108"
 HypertextLiteral = "~0.9.5"
+Match = "~2.0.0"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -289,7 +191,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "f1ac1c493817d14ac4be3190a7eb63d4da412300"
+project_hash = "f1c83abb79444f5fbbbfbad698b2a1fc1873c929"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1132,6 +1034,12 @@ version = "0.4.2"
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
+[[deps.Match]]
+deps = ["MacroTools", "OrderedCollections"]
+git-tree-sha1 = "b007f17213079b77f09a1a37a95dfd721308197f"
+uuid = "7eb4fadd-790c-5f42-8a69-bfa0b872bfbf"
+version = "2.0.0"
+
 [[deps.MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "UnicodeFun"]
 git-tree-sha1 = "96ca8a313eb6437db5ffe946c457a401bbb8ce1d"
@@ -1893,14 +1801,10 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═79a37bd1-4f04-48e9-8587-ed0adb1e143a
-# ╠═c72ea6db-41d5-493c-9d76-30690e5795dc
-# ╠═993212eb-f32e-42a8-975e-b230d4d92ba5
-# ╠═3635ec44-f72f-4d96-b0f3-f991a3d366b6
-# ╠═ab088c46-e041-482e-9a73-41ec8175602c
-# ╠═940fc907-663e-4029-ac8e-ec934a3f15f9
-# ╠═812cc755-3ca9-405e-86b4-4ef2d12e3c64
-# ╠═e7045435-6c74-4501-bc45-3e22d2b28079
-# ╠═8544ea00-a4f2-410f-a23d-621d9bdc3b89
+# ╠═68b9c8d4-02ed-11ef-190e-d74c5b3aef27
+# ╠═d56a7532-86a0-4775-82ae-33d3b27961e5
+# ╠═37aca826-373d-4969-902b-b11a35c1d9f5
+# ╠═b16bbffd-bc8f-4685-a10e-8f980515a8bb
+# ╠═bfddc876-f682-42be-a592-20d4781a0de3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

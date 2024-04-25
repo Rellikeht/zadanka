@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 #include <fcntl.h>
 #include <mqueue.h>
 #include <signal.h>
@@ -10,24 +8,27 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "protocol_specs.h"
-
-/** signal handler to exit from loop */
-volatile bool should_close = false;
-
-void SIGNAL_handler(int signum) { should_close = true; }
+#include "config.h"
 
 // helper macro for getting minimum of two values
 #define MIN(a, b) (a < b ? a : b)
 
-int main() {
-    /* create unique identifier for client queue */
-    /* I set name to be associated with clients pid because it
-     * increases chances of generating unique queue name */
-    pid_t pid = getpid();
-    char queue_name[CLIENT_QUEUE_NAME_SIZE] = {0};
-    sprintf(queue_name, "/simple_chat_client_queue_%d", pid);
+/** signal handler to exit from loop */
+volatile bool should_close = false;
 
+void signalHandler(int signum) { should_close = true; }
+
+int queueUnlink(char *queue_name) {
+    int err = mq_unlink(queue_name);
+    if (err != 0) {
+        perror("client mq_unlink()");
+    }
+    return err;
+}
+
+int main() {
+    pid_t pid = 0;
+    char queue_name[CLIENT_QUEUE_NAME_SIZE] = {0};
     /**
      * Fill in structure speicifing options for creation of
      * client queue
@@ -35,7 +36,11 @@ int main() {
     struct mq_attr attributes = {
         .mq_flags = 0,
         .mq_msgsize = sizeof(message_t),
-        .mq_maxmsg = 10};
+        .mq_maxmsg = 10,
+    };
+
+    pid = getpid();
+    sprintf(queue_name, "/chat_client_queue_%d", pid);
 
     /**
      * Create client queue with options for server -> client
@@ -52,7 +57,7 @@ int main() {
         &attributes
     );
     if (mq_client_descriptor < 0)
-        perror("mq_open client");
+        perror("client mq_open()");
 
     /**
      * Try opening server queue for client -> server
@@ -226,11 +231,11 @@ int main() {
             );
         }
 
-        /* Close quees  */
+        // TODO error
         mq_close(mq_server_descriptor);
         mq_close(mq_client_descriptor);
-
-        /** Delete created queues file descriptor */
-        mq_unlink(queue_name);
+        return queueUnlink(queue_name);
     }
+
+    return 0;
 }
