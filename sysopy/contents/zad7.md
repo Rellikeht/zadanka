@@ -1,8 +1,8 @@
 # IPC - kolejki komunikatów
 
-Przydatne funkcje:
+## Przydatne funkcje:
 
-System V (\<sys/msg.h>, \<sys/ipc.h>):
+### System V (\<sys/msg.h>, \<sys/ipc.h>):
 
 - msgget
 - msgctl
@@ -10,7 +10,7 @@ System V (\<sys/msg.h>, \<sys/ipc.h>):
 - msgrcv
 - ftok
 
-POSIX (\<mqueue.h>):
+### POSIX (\<mqueue.h>):
 
 - mq_open
 - mq_send
