@@ -38,24 +38,28 @@ end
 begin
     const board_row::String = "---+---+---"
 
-    @enum BoardStateVal X O E
-	mutable struct BoardState
-		player::BoardStateVal
-		winner::BoardStateVal
-	end
-	const defaultBoardState = BoardState(X, E)
-	const BoardContent = Array{BoardStateVal,2}
+    @enum BoardStateVal::Int8 X O E
+    mutable struct BoardState
+        player::BoardStateVal
+        winner::BoardStateVal
+        BoardState(
+            player::BoardStateVal=X,
+            winner::BoardStateVal=E
+        ) = new(player, winner)
+    end
+    const BoardContent = Array{BoardStateVal,2}
+    const default_content = [[E E E];[E E E];[E E E]]
     struct Board
         content::BoardContent
-		state::BoardState
+        state::BoardState
         Board(
-            content::Array{BoardStateVal,2}=[[E E E];[E E E];[E E E]],
-			state::BoardState=defaultBoardState
+            content::Array{BoardStateVal,2}=default_content,
+            state::BoardState=BoardState()
         ) = new(
             content,
-			state
+            state
         )
-	end
+    end
 
     function Base.getindex(b::Board, i1::Int, i2::Int)::BoardStateVal
         return b.content[i1, i2]
@@ -67,24 +71,24 @@ begin
         return b.content[I...]
     end
     function Base.setindex!(b::Board, x::BoardStateVal, i1::Int, i2::Int, I::Int...)
-        b.content[i1, i2] = x
+        b.content[i1, i2, I...] = x
     end
     function Base.setindex!(b::Board, x::BoardStateVal, i1::Int)
         b.content[i1] = x
     end
-	function switchSide(b::Board)
-		b.state.player = @match b.state.player begin
-			$X => O
-			$O => X
-			_ => throw(ErrorException("Cannot switch side"))
-		end
-	end
-    begin
-        precompB = Board()
-        _ = precompB[1,2]
-        _ = precompB[2,:]
-        precompB[2,2] = X
-		switchSide(precompB)
+    function switchSide(b::Board)
+        b.state.player = @match b.state.player begin
+            $X => O
+            $O => X
+            _ => throw(ErrorException("Cannot switch side"))
+        end
+    end
+    @time begin
+        precomp_b = Board()
+        _ = precomp_b[1,2]
+        _ = precomp_b[2,:]
+        precomp_b[2,2] = X
+        switchSide(precomp_b)
     end
 
     function str(st::BoardStateVal)::String
@@ -102,59 +106,185 @@ begin
     end
     begin
         _ = str(X)
-        _ = str(precompB)
+        _ = str(precomp_b)
     end
 
-	function playable(b::Board)::Bool
-		return b.state.winner == E
-	end
-	function allowedMoves(b::Board)::Vector{Int}
-		return map(first, (filter(i -> b.content[i] == E, eachindex(b.content))))
-	end
-	function checkWin(b::Board)::Bool
-		# [(0,1,2), (3,4,5), (6,7,8), (0,3,6), (1,4,7), (2,5,8), (0,4,8), (2,4,6)]
-		return false
-	end
-	function makeMove(b::Board, i::Int, j::Int...)
-		if b.content[i, j...] == X || b.content[i, j...] == O
-			throw(ErrorException("Cannot move to already occupied position"))
-		end
-		b.content[i, j...] = b.state.player
-		if count(i -> b.content[i] == E, eachindex(b.content)) == 0
-			b.state.player = E
-		elseif checkWin(b)
-			b.state.winner = b.state.player
-			b.state.player = E
-		else
-			switchSide(b)
-		end
-	end
-	begin
-		_ = playable(precompB)
-		_ = allowedMoves(precompB)
-		_ = checkWin(precompB)
-		makeMove(precompB, 2)
-		println(str(precompB))
-	end
+    function playable(b::Board)::Bool
+        return b.state.player != E
+    end
+    function allowedMoves(b::Board)::Vector{Int}
+        return map(first, (filter(i -> b.content[i] == E, eachindex(b.content))))
+    end
+    function updateState(c::BoardContent, i::Int, p::BoardStateVal)::BoardContent
+        result = deepcopy(c)
+        result[i] = p
+        return result
+    end
+    function allowedStates(b::Board)::Vector{BoardContent}
+        return map(i -> updateState(b.content, i, b.state.player), allowedMoves(b))
+    end
+    @time begin
+        _ = playable(precomp_b)
+        _ = allowedMoves(precomp_b)
+        _ = updateState(precomp_b.content, 3, X)
+        _ = allowedStates(precomp_b)
+    end
+
+    function checkWin(b::Board)::Bool
+        s::Int = dim(b.content)
+        win::Bool = true
+
+        if b.content[1,1] != E
+            for i in 2:s
+                if b.content[i-1, i-1] != b.content[i, i]
+                    win = false
+                    break
+                end
+            end
+            if win
+                return true
+            end
+            win = true
+        end
+
+        if b.content[1,s] != E
+            for i in 2:s
+                if b.content[i-1, s-i+2] != b.content[i, s-i+1]
+                    win = false
+                    break
+                end
+            end
+            if win
+                return true
+            end
+            win = true
+        end
+
+        for i in 1:s
+            if b.content[i, 1] != E
+                for j in 2:s
+                    if b.content[i, j-1] != b.content[i, j]
+                        win = false
+                        break
+                    end
+                end
+                if win
+                    return true
+                end
+                win = true
+            end
+
+            if b.content[1, i] != E
+                for j in 2:s
+                    if b.content[j-1, i] != b.content[j, i]
+                        win = false
+                        break
+                    end
+                end
+                if win
+                    return true
+                end
+                win = true
+            end
+        end
+        return false
+    end
+
+    function makeMove(b::Board, i1::Int, i2::Int...)
+        if b.state.player == E return end
+        if b.content[i1, i2...] == X || b.content[i1, i2...] == O
+            throw(ErrorException("Cannot move to already occupied position"))
+        end
+        b.content[i1, i2...] = b.state.player
+        if count(i -> b.content[i] == E, eachindex(b.content)) == 0
+            b.state.player = E
+        elseif checkWin(b)
+            b.state.winner = b.state.player
+            b.state.player = E
+        else
+            switchSide(b)
+        end
+    end
+
+    # function bstate(b::Board)::BoardContent
+    #   return deepcopy(b.content)
+    # end
+    @time begin
+        precomp_b[1,2] != precomp_b[2, 1]
+        _ = checkWin(precomp_b)
+        makeMove(precomp_b, 2)
+        # println(str(precomp_b))
+    end
 
     md"""
     """
 end
 
-# ╔═╡ 37aca826-373d-4969-902b-b11a35c1d9f5
+# ╔═╡ 32657ec9-35d7-417d-9b2d-29a7f1820a1c
 # begin
-# 	const precompPS = pairs(precompB.content)
-# 	for (i, j) in precompPS
-# 		println(i, " ", j)
-# 	end
-# 	println(precompPS[1])
-# 	println(precompPS[5])
+#     b1 = Board()
+#     makeMove(b1, 1)
+#     b2 = deepcopy(b1)
+#     makeMove(b1, 2)
+#     println(str(b1))
+#     println(b1.state.player, " ", b1.state.winner)
+#     println()
+#     println(str(b2))
+#     println(b2.state.player, " ", b2.state.winner)
 # end
+
+# ╔═╡ 37aca826-373d-4969-902b-b11a35c1d9f5
+begin
+#   const precompPS = pairs(precomp_b.content)
+#   for (i, j) in precompPS
+#       println(i, " ", j)
+#   end
+#   println(precompPS[1])
+#   println(precompPS[5])
+
+    # println(size(precomp_b.content))
+end
 
 # ╔═╡ b16bbffd-bc8f-4685-a10e-8f980515a8bb
 begin
+    const default_v = 0.0
+    const default_ε = 0.1
+    const default_α = 0.5
+	const default_reward = 1
+
     struct Agent
+        V::Dict{BoardContent, Float64}
+        ε::Float64
+        α::Float64
+        player::BoardStateVal
+        game::Board
+		reward::Float64
+        Agent(
+            V=Dict(),
+            ε=default_ε,
+            α=default_α,
+            player=X,
+            game=Board(),
+			reward=default_reward
+        ) = new(V,ε,α,player,game,reward)
     end
+    @time begin
+        precomp_a = Agent()
+    end
+
+    function possibleStateValues(a::Agent)::Vector{Tuple{BoardContent, Float64}}
+		# TODO mutacja ?
+        map(s -> (s, getkey(a.V, s, default_v)), allowedStates(a.game))
+    end
+	function selectMove(a::Agent)::Int
+		return 0 #TODO
+	end
+    @time begin
+        _ = possibleStateValues(precomp_a)
+    end
+
+    md"""
+    """
 end
 
 # ╔═╡ bfddc876-f682-42be-a592-20d4781a0de3
@@ -1803,6 +1933,7 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═68b9c8d4-02ed-11ef-190e-d74c5b3aef27
 # ╠═d56a7532-86a0-4775-82ae-33d3b27961e5
+# ╠═32657ec9-35d7-417d-9b2d-29a7f1820a1c
 # ╠═37aca826-373d-4969-902b-b11a35c1d9f5
 # ╠═b16bbffd-bc8f-4685-a10e-8f980515a8bb
 # ╠═bfddc876-f682-42be-a592-20d4781a0de3
