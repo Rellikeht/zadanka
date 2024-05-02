@@ -1,4 +1,4 @@
-#!/usr/bin/env julia
+#!/usr/bin/env -S julia -g0 -O3 -t auto --banner=no
 
 using Pkg
 Pkg.activate(".")
