@@ -1,0 +1,10 @@
+---
+CompileFlags:
+  Add: [-xc, -std=gnu99, -Wall, -Wno-variadic-macros, -Wextra]
+  Compiler: gcc
+---
+Diagnostics:
+  ClangTidy:
+    Add: modernize*
+    Remove: modernize-use-trailing-return-type
+    FastCheckFilter: Loose

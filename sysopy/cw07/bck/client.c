@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-
 #include <fcntl.h>
 #include <mqueue.h>
 #include <signal.h>
@@ -10,24 +8,28 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "protocol_specs.h"
-
-/** signal handler to exit from loop */
-volatile bool should_close = false;
-
-void SIGNAL_handler(int signum) { should_close = true; }
+#include "config.h"
 
 // helper macro for getting minimum of two values
 #define MIN(a, b) (a < b ? a : b)
 
-int main() {
-    /* create unique identifier for client queue */
-    /* I set name to be associated with clients pid because it
-     * increases chances of generating unique queue name */
-    pid_t pid = getpid();
-    char queue_name[CLIENT_QUEUE_NAME_SIZE] = {0};
-    sprintf(queue_name, "/simple_chat_client_queue_%d", pid);
+/** signal handler to exit from loop */
+volatile bool should_close = false;
 
+void signalHandler(int signum) { should_close = true; }
+
+int queueUnlink(char *queue_name) {
+    int err = mq_unlink(queue_name);
+    if (err != 0) {
+        perror("client mq_unlink()");
+    }
+    return err;
+}
+
+int main() {
+    int err = 0;
+    pid_t pid = 0;
+    char queue_name[CLIENT_QUEUE_NAME_SIZE] = {0};
     /**
      * Fill in structure speicifing options for creation of
      * client queue
@@ -35,8 +37,11 @@ int main() {
     struct mq_attr attributes = {
         .mq_flags = 0,
         .mq_msgsize = sizeof(message_t),
-        .mq_maxmsg = 10
+        .mq_maxmsg = 10,
     };
+
+    pid = getpid();
+    sprintf(queue_name, "/chat_client_queue_%d", pid);
 
     /**
      * Create client queue with options for server -> client
@@ -53,7 +58,7 @@ int main() {
         &attributes
     );
     if (mq_client_descriptor < 0)
-        perror("mq_open client");
+        perror("client mq_open()");
 
     /**
      * Try opening server queue for client -> server
@@ -93,34 +98,37 @@ int main() {
     // create pipe for communication between parent (writing to
     // server) and child (reading from server) processes
     int to_parent_pipe[2];
-    if (pipe(to_parent_pipe) < 0)
+    if (pipe(to_parent_pipe) < 0) {
         perror("pipe");
+    }
 
     // register signal handler for closing client to all signals
     for (int sig = 1; sig < SIGRTMAX; sig++) {
-        signal(sig, SIGNAL_handler);
+        if (signal(sig, signalHandler) == SIG_ERR) {
+            perror("signal");
+            return 1;
+        }
     }
 
     // create child process for listening to messages from
     // server
     pid_t listener_pid = fork();
-    if (listener_pid < 0)
+    if (listener_pid < 0) {
         perror("fork listener");
-    else if (listener_pid == 0) {
+        return 1;
+    } else if (listener_pid == 0) {
         // close reading end of the pipe
         close(to_parent_pipe[0]);
         message_t receive_message;
         while (!should_close) {
             // receive message from server (block until message
             // is received)
-            if (mq_receive(
-                    mq_client_descriptor,
-                    (char *)&receive_message,
-                    sizeof(receive_message),
-                    NULL
-                ) == -1)
-                perror("mq_receive");
-
+            mq_receive(
+                mq_client_descriptor,
+                (char *)&receive_message,
+                sizeof(receive_message),
+                NULL
+            );
             switch (receive_message.type) {
             /* we received standard message from server with
              * text data */
@@ -154,7 +162,6 @@ int main() {
         }
         printf("Exiting from receive loop\n");
         exit(0);
-
     } else {
         // close writing end of the pipe
         close(to_parent_pipe[1]);
@@ -171,10 +178,7 @@ int main() {
         char *buffer = NULL;
         while (!should_close) {
             // get message queue attributes
-            if (mq_getattr(mq_server_descriptor, &attributes) ==
-                -1)
-                perror("mq_getattr");
-
+            mq_getattr(mq_server_descriptor, &attributes);
             // check if we can send more messages to server
             if (attributes.mq_curmsgs >= attributes.mq_maxmsg) {
                 printf("Server is busy, please wait\n");
@@ -202,13 +206,12 @@ int main() {
                 );
 
                 // send message to server
-                if (mq_send(
-                        mq_server_descriptor,
-                        (char *)&send_message,
-                        sizeof(send_message),
-                        10
-                    ) == -1)
-                    perror("mq_send");
+                mq_send(
+                    mq_server_descriptor,
+                    (char *)&send_message,
+                    sizeof(send_message),
+                    10
+                );
 
                 // free memory allocated by scanf
                 free(buffer);
@@ -228,23 +231,18 @@ int main() {
                 .type = CLIENT_CLOSE, .identifier = identifier
             };
             /* Notify server that client is closing */
-            if (mq_send(
-                    mq_server_descriptor,
-                    (char *)&message_close,
-                    sizeof(message_close),
-                    10
-                ) == -1)
-                perror("mq_send");
+            mq_send(
+                mq_server_descriptor,
+                (char *)&message_close,
+                sizeof(message_close),
+                10
+            );
         }
 
-        /* Close quees  */
-        if (mq_close(mq_server_descriptor) == -1)
-            perror("mq_close");
-        if (mq_close(mq_client_descriptor) == -1)
-            perror("mq_close");
-
-        /** Delete created queues file descriptor */
-        if (mq_unlink(queue_name) == -1)
-            perror("mq_unlink");
+        mq_close(mq_server_descriptor);
+        mq_close(mq_client_descriptor);
+        return queueUnlink(queue_name);
     }
+
+    return 0;
 }

@@ -1,75 +1,82 @@
 #include <fcntl.h>
 #include <mqueue.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
-#include "protocol_specs.h"
+#include "config.h"
 
-/** signal handler to exit from loop */
 volatile bool should_close = false;
 
-void SIGNAL_handler(int signum) { should_close = true; }
+void signalHandler(int signum) { should_close = true; }
+
+int queueUnlink() {
+    int err = mq_unlink(SERVER_QUEUE_NAME);
+    if (err != 0) {
+        perror("server mq_unlink()");
+    }
+    return err;
+}
 
 int main() {
-    int id = 0;
-    int err = 0;
+    int id = 0, err = 0, i = 0, sig = 0;
+    message_t receive_message;
+    mqd_t mq_descriptor = {0};
+    mqd_t client_queues[MAX_CLIENTS_COUNT];
 
-    /**
-     * Fill in structure speicifing options for creation of
-     * client queue
-     */
     struct mq_attr attributes = {
         .mq_flags = 0,
         .mq_msgsize = sizeof(message_t),
-        .mq_maxmsg = 10
+        .mq_maxmsg = 10,
     };
 
-    /**
-     * Create server queue with options for client -> server
-     * communication
-     *  - O_RDWR - open for reading and writing
-     *  - O_CREAT - create queue if it does not exist
-     *  - S_IRUSR | S_IWUSR - set permissions for user to read
-     * and write
-     */
-    mqd_t mq_descriptor = mq_open(
+    mq_descriptor = mq_open(
         SERVER_QUEUE_NAME,
         O_RDWR | O_CREAT,
         S_IRUSR | S_IWUSR,
         &attributes
     );
+
     if (mq_descriptor < 0) {
-        perror("mq_open server");
+        perror("server mq_open()");
         return 1;
     }
-
-    message_t receive_message;
 
     /**
      * Array of client queues descriptors
      *  - initialized with -1 to indicate that id is not used
      */
-    mqd_t client_queues[MAX_CLIENTS_COUNT];
-    for (int i = 0; i < MAX_CLIENTS_COUNT; i++)
+    for (i = 0; i < MAX_CLIENTS_COUNT; i++)
         client_queues[i] = -1;
+
+    // register signal handler for closing client to all signals
+    for (sig = 1; sig < SIGRTMAX; sig++) {
+        if (signal(sig, signalHandler) != SIG_ERR) {
+            perror("server signal()");
+            return 1 + queueUnlink();
+        }
+    }
 
     while (!should_close) {
         // receive message from server queue
-        if (mq_receive(
-                mq_descriptor,
-                (char *)&receive_message,
-                sizeof(receive_message),
-                NULL
-            ) == -1) {
-            perror("mq_receive");
+        err = mq_receive(
+            mq_descriptor,
+            (char *)&receive_message,
+            sizeof(receive_message),
+            NULL
+        );
+        if (err == -1) {
+            perror("server mq_receive()");
+            err = 0;
         }
 
         switch (receive_message.type) {
         /* Requested initialization from the client */
         case INIT:
-            id = 0;
             /* Find first available id */
+            id = 0;
             while (client_queues[id] != -1 &&
                    id < MAX_CLIENTS_COUNT)
                 id++;
@@ -79,6 +86,7 @@ int main() {
             if (id == MAX_CLIENTS_COUNT) {
                 printf("Max number of clients has connected, "
                        "can't open another connection\n");
+                usleep(10000);
                 continue;
             }
 
@@ -95,17 +103,19 @@ int main() {
 
             /* Send identifier to client */
             message_t send_message = {
-                .type = IDENTIFIER, .identifier = id
-            };
+                .type = IDENTIFIER, .identifier = id};
 
-            if (mq_send(
-                    client_queues[id],
-                    (char *)&send_message,
-                    sizeof(send_message),
-                    10
-                ) == -1) {
-                perror("mq_send");
-            };
+            err = mq_send(
+                client_queues[id],
+                (char *)&send_message,
+                sizeof(send_message),
+                10
+            );
+            if (err != 0) {
+                perror("server mq_send()");
+                err = 0;
+            }
+
             printf(
                 "Registered connection with client at id: %d\n",
                 id
@@ -122,13 +132,15 @@ int main() {
                 if (identifier != receive_message.identifier &&
                     identifier != -1) {
                     /* Broadcast received message */
-                    if (mq_send(
-                            client_queues[identifier],
-                            (char *)&receive_message,
-                            sizeof(receive_message),
-                            10
-                        ) == -1) {
-                        perror("mq_send");
+                    err = mq_send(
+                        client_queues[identifier],
+                        (char *)&receive_message,
+                        sizeof(receive_message),
+                        10
+                    );
+                    if (err != 0) {
+                        perror("mq_send()");
+                        err = 0;
                     }
                 }
             }
@@ -138,10 +150,12 @@ int main() {
          * has been closed */
         case CLIENT_CLOSE:
             /* Close client queue */
-            if (mq_close(
-                    client_queues[receive_message.identifier]
-                ) == -1) {
-                perror("mq_close");
+            err = mq_close(
+                client_queues[receive_message.identifier]
+            );
+            if (err != 0) {
+                perror("server mq_close()");
+                err = 0;
             }
             /* Mark that id is not used */
             client_queues[receive_message.identifier] = -1;
@@ -167,22 +181,22 @@ int main() {
      * Close all client queues
      */
     for (int i = 0; i < MAX_CLIENTS_COUNT; i++) {
-        if (client_queues[i] != -1)
-            if (mq_close(client_queues[i]) == -1)
-                perror("mq_close");
+        if (client_queues[i] != -1) {
+            err = mq_close(client_queues[i]);
+            if (err != 0) {
+                perror("server: client mq_close()");
+                err = 0;
+            }
+        }
     }
 
     /**
      * Close and unlink server queue
      */
-    if (mq_close(mq_descriptor) == -1) {
-        perror("mq_close");
-        err++;
-    }
-    if (mq_unlink(SERVER_QUEUE_NAME) == -1) {
-        perror("mq_unlink");
-        err++;
+    err = mq_close(mq_descriptor);
+    if (err != 0) {
+        perror("server: main mq_close()");
     }
 
-    return err;
+    return err + queueUnlink();
 }
