@@ -22,5 +22,4 @@ struct memory_map_t {
     int number_of_printers;
     int total_users;
     int current_users;
-    int isActive;
 };

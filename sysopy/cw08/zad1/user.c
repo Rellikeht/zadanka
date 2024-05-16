@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <mqueue.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +28,7 @@ int find_free_printer(struct memory_map_t *mem_map) {
 }
 
 int main() {
-    int isActive = 1, memory_fd = 0, ix = 0;
+    int memory_fd = 0, ix = 0;
     char message[MAX_MSG_LENGTH] = {0};
 
     srand(time(0));
@@ -74,39 +75,25 @@ int main() {
     printf("User can start printing...\n");
     memory_map->current_users++;
 
-    while (isActive) {
-
+    while (true) {
         fgets(message, MAX_MSG_LENGTH, stdin);
-
-        if (strcmp(message, "EXIT\n") == 0) {
-            isActive = 0;
-            memory_map->isActive = 0;
-        } else if (strcmp(message, "CLOSE\n") == 0) {
-            isActive = 0;
-            memory_map->current_users--;
-        } else {
-            ix = find_free_printer(memory_map);
-
-            if (sem_wait(
-                    &memory_map->printers[ix].printer_semaphore
-                ) < 0) {
-                perror("Encountered error with sem_wait.");
-                fprintf(stderr, "Exiting...");
-                return -1;
-            }
-
-            strcpy(
-                memory_map->printers[ix].printer_buffer, message
-            );
-            memory_map->printers[ix].buffer_length =
-                strlen(message);
-            memory_map->printers[ix].isPrinting = 1;
-            sleep(rand() % 3 + 1);
-
-            printf(
-                "Message has been printed by printer %d\n", ix
-            );
+        ix = find_free_printer(memory_map);
+        if (sem_wait(&memory_map->printers[ix].printer_semaphore
+            ) < 0) {
+            perror("Encountered error with sem_wait.");
+            fprintf(stderr, "Exiting...");
+            return -1;
         }
+
+        strcpy(
+            memory_map->printers[ix].printer_buffer, message
+        );
+        memory_map->printers[ix].buffer_length =
+            strlen(message);
+        memory_map->printers[ix].isPrinting = 1;
+        sleep(rand() % 3 + 1);
+
+        printf("Message has been printed by printer %d\n", ix);
     }
 
     munmap(memory_map, sizeof(struct memory_map_t));

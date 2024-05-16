@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <mqueue.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,7 +93,6 @@ int main(int argc, char *argv[]) {
     memory_map->number_of_printers = M;
     memory_map->total_users = N;
     memory_map->current_users = 0;
-    memory_map->isActive = 1;
 
     for (int i = 0; i < memory_map->number_of_printers; i++) {
         sem_init(
@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 
     printf("The printers are starting...\n");
 
-    while (memory_map->isActive) {
+    while (true) {
         for (int i = 0; i < memory_map->number_of_printers;
              i++) {
             if (memory_map->printers[i].isPrinting) {
@@ -115,6 +115,8 @@ int main(int argc, char *argv[]) {
                         memory_map->printers[i]
                             .printer_buffer[j]
                     );
+                    fflush(stdout);
+                    sleep(1);
                 }
                 memory_map->printers[i].isPrinting = 0;
                 sem_post(
@@ -122,7 +124,6 @@ int main(int argc, char *argv[]) {
                 );
             }
         }
-        sleep(1);
     }
 
     for (int i = 0; i < memory_map->number_of_printers; i++) {
