@@ -1,16 +1,14 @@
-#include<mqueue.h>
+#pragma once
+#include <mqueue.h>
 #include <semaphore.h>
 
-#ifndef MESSAGE_TYPES_H
+#define SHARED_MEMORY_DESCRIPTOR_NAME                          \
+    "printer_system_shared_memory"
 
-#define MESSAGE_TYPES_H
-
-#define SHARED_MEMORY_DESCRIPTOR_NAME "printer_system_shared_memory"
-
-#define MAX_MSG_LENGTH 10
-#define MAX_PRINTERS 256
+#define MAX_MSG_LENGTH          10
+#define MAX_PRINTERS            256
 #define MAX_PRINTER_BUFFER_SIZE 256
-#define MAX_USERS 10
+#define MAX_USERS               10
 
 struct printer_t {
     sem_t printer_semaphore;
@@ -26,5 +24,3 @@ struct memory_map_t {
     int current_users;
     int isActive;
 };
-
-#endif
