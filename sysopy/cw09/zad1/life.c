@@ -12,13 +12,15 @@
 typedef struct {
     char *foreground;
     char *background;
-    int start; // inclusive
-    int end;   // exclusive
+    int start;
+    int end;
 } thread_args;
 
 void *thread_comp(void *t_args) {
-    /* thread_args args = *(thread_args *)t_args; */
-    sigset_t set;
+    thread_args args = *(thread_args *)t_args;
+    sigset_t set = {0};
+    int sig = 0;
+
     sigemptyset(&set);
     sigaddset(&set, SIGUSR1);
 
@@ -27,37 +29,33 @@ void *thread_comp(void *t_args) {
         exit(EXIT_FAILURE);
     }
 
-    /*     while (true) { */
-    /*         int sig; */
-    /*         if (sigwait(&set, &sig) != 0) { */
-    /*             fprintf(stderr, "sigwait failed\n"); */
-    /*             continue; */
-    /*         } */
+    while (true) {
+        if (sigwait(&set, &sig) != 0) {
+            fprintf(stderr, "sigwait failed\n");
+            continue;
+        }
 
-    /*         if (sig != SIGUSR1) { */
-    /*             continue; */
-    /*         } */
+        if (sig != SIGUSR1) {
+            continue;
+        }
 
-    /*         update_subgrid( */
-    /*             args.foreground, */
-    /*             args.background, */
-    /*             args.start, */
-    /*             args.end */
-    /*         ); */
+        update_subgrid(
+            args.foreground,
+            args.background,
+            args.start,
+            args.end
+        );
 
-    /*         char *tmp = args.foreground; */
-    /*         args.foreground = args.background; */
-    /*         args.background = tmp; */
-    /*     } */
+        char *tmp = args.foreground;
+        args.foreground = args.background;
+        args.background = tmp;
+    }
 
     return NULL;
 }
 
-bool running = true;
-void sigint_handler(int ignored) {
-    running = false;
-    /* endwin(); // End curses mode */
-}
+volatile bool running = true;
+void sigint_handler(int ignored) { running = false; }
 
 int main(int argc, char const *argv[]) {
     int n_threads = 0;
@@ -87,7 +85,7 @@ int main(int argc, char const *argv[]) {
 
     threads = malloc(sizeof(pthread_t) * n_threads);
     args = malloc(sizeof(thread_args) * n_threads);
-    for (long i = 0; i < n_threads; i++) {
+    for (int i = 0; i < n_threads; i++) {
         (&args[i])->foreground = foreground;
         (&args[i])->background = background;
         (&args[i])->start =
@@ -101,7 +99,7 @@ int main(int argc, char const *argv[]) {
         }
 
         if (pthread_create(
-                &threads[i], NULL, thread_comp, args
+                &threads[i], NULL, thread_comp, &args[i]
             ) != 0) {
             perror("pthread_create: ");
             return EXIT_FAILURE;
@@ -110,13 +108,19 @@ int main(int argc, char const *argv[]) {
 
     while (running) {
         draw_grid(foreground);
-        usleep(500 * 1000);
 
-        // Step simulation
-        update_grid(foreground, background);
-        tmp = foreground;
-        foreground = background;
-        background = tmp;
+        for (long i = 0; i < n_threads; i++) {
+            if (pthread_kill(threads[i], SIGUSR1) != 0) {
+                fprintf(
+                    stderr,
+                    "Nie udało się wysłać sygnału do wątku "
+                    "%ld\n",
+                    i
+                );
+            }
+        }
+
+        usleep(500 * 1000);
     }
 
     free(threads);
