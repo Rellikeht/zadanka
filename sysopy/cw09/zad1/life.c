@@ -20,7 +20,9 @@ void *thread_comp(void *t_args) {
     thread_args args = *(thread_args *)t_args;
     sigset_t set = {0};
     int sig = 0;
+    char *tmp = NULL;
 
+    free(t_args);
     sigemptyset(&set);
     sigaddset(&set, SIGUSR1);
 
@@ -46,7 +48,7 @@ void *thread_comp(void *t_args) {
             args.end
         );
 
-        char *tmp = args.foreground;
+        tmp = args.foreground;
         args.foreground = args.background;
         args.background = tmp;
     }
@@ -54,14 +56,11 @@ void *thread_comp(void *t_args) {
     return NULL;
 }
 
-volatile bool running = true;
-void sigint_handler(int ignored) { running = false; }
-
 int main(int argc, char const *argv[]) {
     int n_threads = 0;
     pthread_t *threads = NULL;
     thread_args *args = NULL;
-    char *foreground = NULL, *background = NULL, *tmp = NULL;
+    char *foreground = NULL, *background = NULL;
 
     if (argc != 2) {
         fprintf(stderr, "Należy podać ilość wątków\n");
@@ -77,44 +76,42 @@ int main(int argc, char const *argv[]) {
     srand(time(NULL));
     setlocale(LC_CTYPE, "");
     initscr(); // Start curses mode
-    signal(SIGINT, sigint_handler);
 
     foreground = create_grid();
     background = create_grid();
     init_grid(foreground);
 
     threads = malloc(sizeof(pthread_t) * n_threads);
-    args = malloc(sizeof(thread_args) * n_threads);
     for (int i = 0; i < n_threads; i++) {
-        (&args[i])->foreground = foreground;
-        (&args[i])->background = background;
-        (&args[i])->start =
+        args = malloc(sizeof(thread_args));
+        args->foreground = foreground;
+        args->background = background;
+        args->start =
             i * (GRID_WIDTH * GRID_HEIGHT) / n_threads;
         if (i == n_threads - 1) {
-            (&args[i])->end = GRID_WIDTH * GRID_HEIGHT;
+            args->end = GRID_WIDTH * GRID_HEIGHT;
         } else {
-            (&args[i])->end = (i + 1) *
-                              (GRID_WIDTH * GRID_HEIGHT) /
-                              n_threads;
+            args->end = (i + 1) * (GRID_WIDTH * GRID_HEIGHT) /
+                        n_threads;
         }
 
         if (pthread_create(
-                &threads[i], NULL, thread_comp, &args[i]
+                &threads[i], NULL, thread_comp, args
             ) != 0) {
             perror("pthread_create: ");
             return EXIT_FAILURE;
         }
     }
 
-    while (running) {
+    while (true) {
         draw_grid(foreground);
 
-        for (long i = 0; i < n_threads; i++) {
+        for (int i = 0; i < n_threads; i++) {
             if (pthread_kill(threads[i], SIGUSR1) != 0) {
                 fprintf(
                     stderr,
                     "Nie udało się wysłać sygnału do wątku "
-                    "%ld\n",
+                    "%i\n",
                     i
                 );
             }

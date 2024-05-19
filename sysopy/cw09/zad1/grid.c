@@ -1,7 +1,6 @@
 #include "grid.h"
 #include <ncurses.h>
 #include <stdlib.h>
-/* #include <time.h> */
 
 char *create_grid() {
     return malloc(sizeof(char) * GRID_WIDTH * GRID_HEIGHT);
