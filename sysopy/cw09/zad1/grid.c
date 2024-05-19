@@ -3,21 +3,18 @@
 #include <stdlib.h>
 #include <time.h>
 
-const int grid_width = 30;
-const int grid_height = 30;
-
 char *create_grid() {
-    return malloc(sizeof(char) * grid_width * grid_height);
+    return malloc(sizeof(char) * GRID_WIDTH * GRID_HEIGHT);
 }
 
 void destroy_grid(char *grid) { free(grid); }
 
 void draw_grid(char *grid) {
-    for (int i = 0; i < grid_height; ++i) {
+    for (int i = 0; i < GRID_HEIGHT; ++i) {
         // Two characters for more uniform spaces (vertical vs
         // horizontal)
-        for (int j = 0; j < grid_width; ++j) {
-            if (grid[i * grid_width + j]) {
+        for (int j = 0; j < GRID_WIDTH; ++j) {
+            if (grid[i * GRID_WIDTH + j]) {
                 mvprintw(i, j * 2, "■");
                 mvprintw(i, j * 2 + 1, " ");
             } else {
@@ -31,7 +28,7 @@ void draw_grid(char *grid) {
 }
 
 void init_grid(char *grid) {
-    for (int i = 0; i < grid_width * grid_height; ++i)
+    for (int i = 0; i < GRID_WIDTH * GRID_HEIGHT; ++i)
         grid[i] = rand() % 2 == 0;
 }
 
@@ -45,17 +42,17 @@ bool is_alive(int row, int col, char *grid) {
             }
             int r = row + i;
             int c = col + j;
-            if (r < 0 || r >= grid_height || c < 0 ||
-                c >= grid_width) {
+            if (r < 0 || r >= GRID_HEIGHT || c < 0 ||
+                c >= GRID_WIDTH) {
                 continue;
             }
-            if (grid[grid_width * r + c]) {
+            if (grid[GRID_WIDTH * r + c]) {
                 count++;
             }
         }
     }
 
-    if (grid[row * grid_width + col]) {
+    if (grid[row * GRID_WIDTH + col]) {
         if (count == 2 || count == 3)
             return true;
         else
@@ -69,9 +66,17 @@ bool is_alive(int row, int col, char *grid) {
 }
 
 void update_grid(char *src, char *dst) {
-    for (int i = 0; i < grid_height; ++i) {
-        for (int j = 0; j < grid_width; ++j) {
-            dst[i * grid_width + j] = is_alive(i, j, src);
+    for (int i = 0; i < GRID_HEIGHT; ++i) {
+        for (int j = 0; j < GRID_WIDTH; ++j) {
+            dst[i * GRID_WIDTH + j] = is_alive(i, j, src);
         }
+    }
+}
+
+void update_subgrid(char *src, char *dst, int start, int end) {
+    for (int i = start; i < end; i++) {
+        int row = i / GRID_WIDTH;
+        int col = i % GRID_WIDTH;
+        dst[i] = is_alive(row, col, src);
     }
 }

@@ -18,5 +18,5 @@ cp -r "$DIR" "$TOP"
 tar czf "$TNAME" "$TOP"
 
 mv *.gz "$DIR/.."
-cd "$DIR"
+# cd "$DIR"
 rm -r "$TEMP"

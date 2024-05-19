@@ -14,5 +14,5 @@ cp -r "$DIR"/* .
 
 tar czf "$TNAME" *
 mv *.gz "$DIR/.."
-cd "$DIR"
+# cd "$DIR"
 rm -r "$TEMP"
