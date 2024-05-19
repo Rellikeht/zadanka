@@ -1,7 +1,7 @@
 #include "grid.h"
 #include <ncurses.h>
 #include <stdlib.h>
-#include <time.h>
+/* #include <time.h> */
 
 char *create_grid() {
     return malloc(sizeof(char) * GRID_WIDTH * GRID_HEIGHT);
@@ -33,8 +33,8 @@ void init_grid(char *grid) {
 }
 
 bool is_alive(int row, int col, char *grid) {
-
     int count = 0;
+
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
             if (i == 0 && j == 0) {
@@ -53,15 +53,9 @@ bool is_alive(int row, int col, char *grid) {
     }
 
     if (grid[row * GRID_WIDTH + col]) {
-        if (count == 2 || count == 3)
-            return true;
-        else
-            return false;
+        return count == 2 || count == 3;
     } else {
-        if (count == 3)
-            return true;
-        else
-            return false;
+        return count == 3;
     }
 }
 
