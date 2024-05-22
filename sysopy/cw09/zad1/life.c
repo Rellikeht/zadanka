@@ -121,7 +121,6 @@ int main(int argc, char const *argv[]) {
     }
 
     free(threads);
-    free(args);
     endwin(); // End curses mode
     destroy_grid(foreground);
     destroy_grid(background);

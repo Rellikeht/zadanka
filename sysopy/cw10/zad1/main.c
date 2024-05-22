@@ -5,50 +5,48 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define RENIFERS  9
-#define RUNS      1
+#define REINDEERS 9
+#define RUNS      4
 #define UNUSED(x) (void)(x)
-#define SECOND    10000
+#define SECOND    100000
 
 typedef struct {
     int id;
 } thread_args;
 
+sem_t *reindeers_waiting = NULL;
 sem_t *santa_waiting = NULL;
-sem_t *renifers_waiting = NULL;
+pthread_mutex_t *lock = NULL;
+int reindeers = 0;
 int runs = 0;
 
 int randint(int a, int b) { return (a + rand() % (b - a + 1)); }
 
-void *renifer(void *t_args) {
+void *reindeer(void *t_args) {
     thread_args args = *(thread_args *)t_args;
     free(t_args);
 
-    /* sigset_t set = {0}; */
-    /* int sig = 0; */
-
     while (runs < RUNS) {
-        int waiting = 0;
         usleep(SECOND * randint(5, 10));
 
-        sem_getvalue(renifers_waiting, &waiting);
+        pthread_mutex_lock(lock);
         printf(
-            "Renifer: czeka %i reniferów na Mikołaja, ID: %i\n",
-            waiting,
+            "Renifer: czeka %i reniferów na Mikołaja, ID: "
+            "%i\n",
+            reindeers,
             args.id
         );
+        reindeers += 1;
 
-        sem_post(renifers_waiting);
-        sem_post(santa_waiting);
-        /* if (waiting == RENIFERS - 1) { */
-        /*     printf( */
-        /*         "Renifer: wybudzam Mikołaja, ID: %i\n",
-         * args.id */
-        /*     ); */
-        /* } */
+        if (reindeers == REINDEERS) {
+            printf(
+                "renifer: wybudzam Mikołaja, ID: %i\n", args.id
+            );
+        }
 
-        sem_wait(renifers_waiting);
-        /* usleep(SECOND * randint(1, 2)); */
+        pthread_mutex_unlock(lock);
+        sem_post(reindeers_waiting);
+        sem_wait(santa_waiting);
     }
 
     return NULL;
@@ -58,26 +56,23 @@ void *santa(void *t_args) {
     UNUSED(t_args);
 
     while (runs < RUNS) {
-        int waiting = 0;
-        while (waiting < RENIFERS) {
-            sem_getvalue(renifers_waiting, &waiting);
-            sleep(SECOND / 10);
+        for (int i = 0; i < REINDEERS; i++) {
+            sem_wait(reindeers_waiting);
         }
 
-        /* for (int i = 0; i < RENIFERS; i++) { */
-        /*     sem_wait(santa_waiting); */
-        /* } */
+        pthread_mutex_lock(lock);
+        reindeers = 0;
+        pthread_mutex_unlock(lock);
 
         printf("Mikołaj: budzę się\n");
         printf("Mikołaj: dostarczam zabawki\n");
         usleep(SECOND * randint(1, 2));
-
-        for (int i = 0; i < RENIFERS; i++) {
-            sem_post(renifers_waiting);
-        }
-
         printf("Mikołaj: zasypiam\n");
         runs += 1;
+
+        for (int i = 0; i < REINDEERS; i++) {
+            sem_post(santa_waiting);
+        }
     }
 
     return NULL;
@@ -88,7 +83,17 @@ int main() {
     thread_args *args = NULL;
     int err;
 
-    srand(time(NULL));
+    lock = malloc(sizeof(pthread_mutex_t));
+    if (lock == NULL) {
+        perror("malloc: ");
+        return 1;
+    }
+
+    reindeers_waiting = malloc(sizeof(sem_t));
+    if (reindeers_waiting == NULL) {
+        perror("malloc: ");
+        return 1;
+    }
 
     santa_waiting = malloc(sizeof(sem_t));
     if (santa_waiting == NULL) {
@@ -96,37 +101,40 @@ int main() {
         return 1;
     }
 
-    renifers_waiting = malloc(sizeof(sem_t));
-    if (renifers_waiting == NULL) {
-        perror("malloc: ");
+    err = sem_init(reindeers_waiting, 0, 0);
+    if (err != 0) {
+        perror("mutex_init: ");
         return 1;
     }
 
     err = sem_init(santa_waiting, 0, 0);
     if (err != 0) {
-        perror("sem_init: ");
+        perror("mutex_init: ");
         return 1;
     }
 
-    err = sem_init(renifers_waiting, 0, 0);
+    err = pthread_mutex_init(lock, NULL);
     if (err != 0) {
-        perror("sem_init: ");
+        perror("mutex_init: ");
         return 1;
     }
 
-    threads = malloc(sizeof(pthread_t) * (RENIFERS + 1));
+    threads = malloc(sizeof(pthread_t) * (REINDEERS + 1));
     if (threads == NULL) {
         perror("malloc: ");
         return 1;
     }
 
-    if (pthread_create(&threads[RENIFERS], NULL, santa, NULL) !=
-        0) {
+    srand(time(NULL));
+
+    if (pthread_create(
+            &threads[REINDEERS], NULL, santa, NULL
+        ) != 0) {
         perror("pthread_create: ");
         return EXIT_FAILURE;
     }
 
-    for (int i = 0; i < RENIFERS; i++) {
+    for (int i = 0; i < REINDEERS; i++) {
         args = malloc(sizeof(thread_args));
         if (args == NULL) {
             perror("malloc: ");
@@ -134,7 +142,7 @@ int main() {
         }
         args->id = i;
 
-        if (pthread_create(&threads[i], NULL, renifer, args) !=
+        if (pthread_create(&threads[i], NULL, reindeer, args) !=
             0) {
             perror("pthread_create: ");
             return EXIT_FAILURE;
@@ -145,9 +153,11 @@ int main() {
         usleep(SECOND / 10);
     }
 
-    free(threads);
+    pthread_mutex_destroy(lock);
+    free(lock);
+    free(reindeers_waiting);
     free(santa_waiting);
-    free(renifers_waiting);
+    free(threads);
 
     return 0;
 }
