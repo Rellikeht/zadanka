@@ -131,11 +131,7 @@ int main(int argc, char *argv[]) {
                 continue;
             }
             printf(
-                "new connection, socket fd: %d, ip: %s, port: "
-                "%d\n",
-                client_socket,
-                inet_ntoa(client_addr.sin_addr),
-                ntohs(client_addr.sin_port)
+                "new connection, socket fd: %d\n", client_socket
             );
 
             for (int i = 1; i <= MAX_CLIENTS; i++) {
