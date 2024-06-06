@@ -1,13 +1,16 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -O2 -std=gnu99 -g -Wall -Wextra -Werror -Wno-variadic-macros
+LDFLAGS = -O2 -Wall
 
-all: client server
+.PHONY: all clean
 
-client:
+all: server client
+
+server: server.c
+	$(CC) $(CFLAGS) server.c command_utils.c -o server
+
+client: client.c
 	$(CC) $(CFLAGS) client.c -o client
 
-server:
-	$(CC) $(CFLAGS) server.c -o server
-	
 clean:
-	rm -rf client server
+	rm -f server client
