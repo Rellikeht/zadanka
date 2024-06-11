@@ -1,6 +1,8 @@
 import java.util.ArrayList;
+import java.util.Random;
 
 public class Point {
+  private final Random RNG = new Random();
   private ArrayList<Point> neighbors;
   private int currentState;
   private int nextState;
@@ -19,13 +21,11 @@ public class Point {
   public void setState(int s) { currentState = s; }
 
   public void calculateNewState() {
-    int numberOfAlive = this.aliveNeighbours();
-    if ((numberOfAlive == 3) && currentState == 0)
-      this.nextState = 1;
-    else if ((numberOfAlive == 2 || numberOfAlive == 3) && currentState == 1)
-      this.nextState = 1;
-    else
-      nextState = 0;
+    if (this.currentState > 0)
+      nextState = currentState - 1;
+    if (this.neighbors.size() > 0 && this.neighbors.get(0).getState() == 0 &&
+        this.getState() > 0)
+      this.neighbors.get(0).nextState = 6;
   }
 
   public void changeState() { currentState = nextState; }
@@ -39,5 +39,12 @@ public class Point {
         numberOfAlive++;
     }
     return numberOfAlive;
+  }
+  public boolean drop() {
+    if (RNG.nextInt(100) < 5) {
+      nextState = 6;
+      return true;
+    } else
+      return false;
   }
 }

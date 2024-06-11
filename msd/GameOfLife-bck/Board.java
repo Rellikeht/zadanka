@@ -56,14 +56,7 @@ public class Board
 
     for (int x = 0; x < points.length; ++x) {
       for (int y = 0; y < points[x].length; ++y) {
-        for (int h = -1; h < 2; h++) {
-          for (int w = -1; w < 2; w++) {
-            if (x + w < points.length && x + w > 0 &&
-                y + h < points[x].length && y + h > 0 && !(w == 0 && h == 0)) {
-              points[x][y].addNeighbor(points[x + w][y + h]);
-            }
-          }
-        }
+        // TODO: initialize the neighborhood of points[x][y] cell
       }
     }
   }

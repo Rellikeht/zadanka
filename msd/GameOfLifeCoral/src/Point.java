@@ -22,7 +22,9 @@ public class Point {
     int numberOfAlive = this.aliveNeighbours();
     if ((numberOfAlive == 3) && currentState == 0)
       this.nextState = 1;
-    else if ((numberOfAlive == 2 || numberOfAlive == 3) && currentState == 1)
+    else if ((numberOfAlive == 4 || numberOfAlive == 5 || numberOfAlive == 6 ||
+              numberOfAlive == 7 || numberOfAlive == 8) &&
+             currentState == 1)
       this.nextState = 1;
     else
       nextState = 0;

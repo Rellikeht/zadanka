@@ -2,8 +2,6 @@
 
 #include "netinet/in.h"
 
-#define TRUE              1
-#define FALSE             0
 #define MAX_CLIENTS       10
 #define MAX_EVENTS        10
 #define MAX_STRING_LENGTH 1024

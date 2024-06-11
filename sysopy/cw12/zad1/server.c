@@ -1,5 +1,6 @@
 #include <netinet/in.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,17 +12,17 @@
 
 #define UNUSED(x) (void)(x)
 
-volatile int break_loop = FALSE;
+volatile int break_loop = false;
 void sigint_handler(int signum) {
     UNUSED(signum);
-    break_loop = TRUE;
+    break_loop = true;
 }
 
 struct client_t clients[MAX_CLIENTS];
 
 int find_free_client() {
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (clients[i].isFree == TRUE) {
+        if (clients[i].isFree == true) {
             return i;
         }
     }
@@ -30,7 +31,7 @@ int find_free_client() {
 
 void list_clients() {
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (clients[i].isFree == FALSE) {
+        if (clients[i].isFree == false) {
             printf(
                 "Username: %s, ID: %d \n", clients[i].username, i
             );
@@ -53,7 +54,7 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, sigint_handler);
 
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        clients[i].isFree = TRUE;
+        clients[i].isFree = true;
     }
 
     struct epoll_event ev, events[MAX_EVENTS];
@@ -92,14 +93,14 @@ int main(int argc, char *argv[]) {
 
     struct message_t buffer;
 
-    while (break_loop == FALSE) {
+    while (break_loop == false) {
         nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
         if (nfds == -1) {
             perror("epoll_wait");
         }
 
         for (int n = 0; n < nfds; ++n) {
-            if (break_loop == TRUE)
+            if (break_loop == true)
                 break;
             if (events[n].data.fd == listen_sock) {
                 ssize_t count = recvfrom(
@@ -122,7 +123,7 @@ int main(int argc, char *argv[]) {
                             printf("Couldn't find free client "
                                    "socket.\n");
                         else {
-                            clients[j].isFree = FALSE;
+                            clients[j].isFree = false;
                             strcpy(
                                 clients[j].username, buffer.message
                             );
@@ -183,7 +184,7 @@ int main(int argc, char *argv[]) {
                             buffer.sender_name
                         );
                         for (int i = 0; i < MAX_CLIENTS; i++) {
-                            if (clients[i].isFree == FALSE) {
+                            if (clients[i].isFree == false) {
                                 sendto(
                                     listen_sock,
                                     &buffer,
@@ -213,7 +214,7 @@ int main(int argc, char *argv[]) {
                     case TO_ONE:
                         k = buffer.receiver_socket;
                         if (k < 0 || k >= MAX_CLIENTS ||
-                            clients[k].isFree == TRUE) {
+                            clients[k].isFree == true) {
                             printf("Couldn't find client socket.\n"
                             );
                             strcpy(
@@ -261,7 +262,7 @@ int main(int argc, char *argv[]) {
                             (struct sockaddr *)&client_addr,
                             sizeof(client_addr)
                         );
-                        clients[buffer.sender_id].isFree = TRUE;
+                        clients[buffer.sender_id].isFree = true;
                         printf(
                             "Client %d successfully logged out.\n",
                             buffer.sender_id
@@ -276,7 +277,7 @@ int main(int argc, char *argv[]) {
                         buffer.type = DFL;
                         strcpy(buffer.message, "PING\n");
                         for (int i = 0; i < MAX_CLIENTS; i++) {
-                            if (clients[i].isFree == FALSE) {
+                            if (clients[i].isFree == false) {
                                 ssize_t count_m = sendto(
                                     listen_sock,
                                     &buffer,
@@ -294,7 +295,7 @@ int main(int argc, char *argv[]) {
                                         "list.\n",
                                         i
                                     );
-                                    clients[i].isFree = TRUE;
+                                    clients[i].isFree = true;
                                 }
                             }
                         }
@@ -335,7 +336,7 @@ int main(int argc, char *argv[]) {
     closing_message.type = INTERNAL_EXIT;
 
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (clients[i].isFree == FALSE) {
+        if (clients[i].isFree == false) {
             sendto(
                 listen_sock,
                 &closing_message,
@@ -344,7 +345,7 @@ int main(int argc, char *argv[]) {
                 (struct sockaddr *)&clients[i].address,
                 sizeof(clients[i].address)
             );
-            clients[i].isFree = TRUE;
+            clients[i].isFree = true;
         }
     }
 

@@ -1,6 +1,7 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,10 +18,10 @@ struct message_t in_message, out_message;
 
 char *username;
 
-volatile int break_loop_sender = FALSE, break_loop_receiver = FALSE;
+volatile int break_loop_sender = false, break_loop_receiver = false;
 void sigint_handler(int signum) {
     UNUSED(signum);
-    break_loop_sender = TRUE;
+    break_loop_sender = true;
 }
 
 void *sender_handler(void *args) {
@@ -29,7 +30,7 @@ void *sender_handler(void *args) {
     strcpy(out_message.sender_name, username);
     out_message.sender_id = in_server_sock;
     char cmd[MAX_STRING_LENGTH];
-    while (break_loop_sender == FALSE) {
+    while (break_loop_sender == false) {
         fgets(cmd, MAX_STRING_LENGTH, stdin);
 
         if (strcmp(cmd, "LIST\n") == 0) {
@@ -42,6 +43,7 @@ void *sender_handler(void *args) {
                 (struct sockaddr *)&server_addr,
                 sizeof(server_addr)
             );
+
         } else if (strcmp(cmd, "2ALL\n") == 0) {
             out_message.type = TO_ALL;
             printf("What's the message you would like to send?\n");
@@ -57,6 +59,7 @@ void *sender_handler(void *args) {
                 (struct sockaddr *)&server_addr,
                 sizeof(server_addr)
             );
+
         } else if (strcmp(cmd, "2ONE\n") == 0) {
             out_message.type = TO_ONE;
             printf("Please provide an ID of the other client and "
@@ -74,6 +77,7 @@ void *sender_handler(void *args) {
                 (struct sockaddr *)&server_addr,
                 sizeof(server_addr)
             );
+
         } else if (strcmp(cmd, "STOP\n") == 0) {
             out_message.type = STOP;
             sendto(
@@ -84,6 +88,7 @@ void *sender_handler(void *args) {
                 (struct sockaddr *)&server_addr,
                 sizeof(server_addr)
             );
+
         } else if (strcmp(cmd, "ALIVE\n") == 0) {
             out_message.type = ALIVE;
             sendto(
@@ -94,7 +99,8 @@ void *sender_handler(void *args) {
                 (struct sockaddr *)&server_addr,
                 sizeof(server_addr)
             );
-        } else if (break_loop_sender == TRUE) {
+
+        } else if (break_loop_sender == true) {
             out_message.type = INTERNAL_EXIT;
             sendto(
                 client_sock,
@@ -105,22 +111,24 @@ void *sender_handler(void *args) {
                 sizeof(server_addr)
             );
             break;
+
         } else
             printf("The command you provided is not supported. "
                    "Please try again.\n");
     }
     printf("Exiting writing mode...\n");
-    return (void *)0;
+    return NULL;
 }
 
-void receiver_handler(void *args) {
+void *receiver_handler(void *args) {
     UNUSED(args);
 
-    while (break_loop_receiver == FALSE) {
+    while (break_loop_receiver == false) {
         ssize_t count = recvfrom(
             client_sock, &in_message, sizeof(in_message), 0, NULL, 0
         );
         if (count > 0) {
+            struct tm tm = {0};
             switch (in_message.type) {
             case DFL:
                 printf(
@@ -130,11 +138,11 @@ void receiver_handler(void *args) {
                 );
                 break;
             case INTERNAL_EXIT:
-                break_loop_receiver = TRUE;
-                break_loop_sender = TRUE;
+                break_loop_receiver = true;
+                break_loop_sender = true;
                 break;
             default:
-                struct tm tm = *localtime(&in_message.sending_time);
+                tm = *localtime(&in_message.sending_time);
                 printf(
                     "Received a message from user %d at "
                     "%d-%02d-%02d %02d:%02d:%02d\n",
@@ -152,12 +160,13 @@ void receiver_handler(void *args) {
         }
         if (count == 0) {
             printf("Server stopped responding.\n");
-            break_loop_sender = TRUE;
+            break_loop_sender = true;
             break;
         }
     }
+
     printf("Exiting listening process...\n");
-    return (void *)0;
+    return NULL;
 }
 
 int main(int argc, char *argv[]) {

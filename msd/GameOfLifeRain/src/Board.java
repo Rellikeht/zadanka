@@ -28,9 +28,14 @@ public class Board
 
   // single iteration
   public void iteration() {
-    for (int x = 0; x < points.length; ++x)
-      for (int y = 0; y < points[x].length; ++y)
+    for (int x = 0; x < points.length; ++x) {
+      for (int y = 0; y < points[x].length; ++y) {
+        if (y == 0) {
+          points[x][y].drop();
+        }
         points[x][y].calculateNewState();
+      }
+    }
 
     for (int x = 0; x < points.length; ++x)
       for (int y = 0; y < points[x].length; ++y)
@@ -56,19 +61,13 @@ public class Board
 
     for (int x = 0; x < points.length; ++x) {
       for (int y = 0; y < points[x].length; ++y) {
-        for (int h = -1; h < 2; h++) {
-          for (int w = -1; w < 2; w++) {
-            if (x + w < points.length && x + w > 0 &&
-                y + h < points[x].length && y + h > 0 && !(w == 0 && h == 0)) {
-              points[x][y].addNeighbor(points[x + w][y + h]);
-            }
-          }
-        }
+        // TODO: initialize the neighborhood of points[x][y] cell
+        if (y + 1 < points[x].length)
+          points[x][y].addNeighbor(points[x][y + 1]);
       }
     }
   }
 
-  // paint background and separators between cells
   protected void paintComponent(Graphics g) {
     if (isOpaque()) {
       g.setColor(getBackground());
@@ -103,22 +102,23 @@ public class Board
         if (points[x][y].getState() != 0) {
           switch (points[x][y].getState()) {
           case 1:
-            g.setColor(new Color(0x0000ff));
+            // g.setColor(new Color(0.0f, 0.0f, 1.0f, 0.65f));
+            g.setColor(new Color(0xCDCDFF));
             break;
           case 2:
-            g.setColor(new Color(0x00ff00));
+            g.setColor(new Color(0xA2A2FF));
             break;
           case 3:
-            g.setColor(new Color(0xff0000));
+            g.setColor(new Color(0x8181FF));
             break;
           case 4:
-            g.setColor(new Color(0x000000));
+            g.setColor(new Color(0x5656FF));
             break;
           case 5:
-            g.setColor(new Color(0x444444));
+            g.setColor(new Color(0x2B2BFF));
             break;
           case 6:
-            g.setColor(new Color(0xffffff));
+            g.setColor(new Color(0x0000FF));
             break;
           }
           g.fillRect((x * size) + 1, (y * size) + 1, (size - 1), (size - 1));

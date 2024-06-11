@@ -19,25 +19,13 @@ public class Point {
   public void setState(int s) { currentState = s; }
 
   public void calculateNewState() {
-    int numberOfAlive = this.aliveNeighbours();
-    if ((numberOfAlive == 3) && currentState == 0)
-      this.nextState = 1;
-    else if ((numberOfAlive == 2 || numberOfAlive == 3) && currentState == 1)
-      this.nextState = 1;
-    else
-      nextState = 0;
+    // TODO: insert logic which updates according to currentState and
+    // number of active neighbors
   }
 
   public void changeState() { currentState = nextState; }
 
   public void addNeighbor(Point nei) { neighbors.add(nei); }
 
-  public int aliveNeighbours() {
-    int numberOfAlive = 0;
-    for (int i = 0; i < neighbors.size(); i++) {
-      if (neighbors.get(i).getState() == 1)
-        numberOfAlive++;
-    }
-    return numberOfAlive;
-  }
+  // TODO: write method counting all active neighbors of THIS point
 }
