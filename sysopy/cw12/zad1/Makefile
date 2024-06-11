@@ -1,16 +1,18 @@
-CC = gcc
-CFLAGS = -O2 -std=gnu99 -g -Wall -Wextra -Werror -Wno-variadic-macros
-LDFLAGS = -O2 -Wall
+CXX = gcc
+CFLAGS = -Wall -Wextra -Wuninitialized -g
 
-.PHONY: all clean
+.PHONY: all clean exe
 
-all: server client
+all: clean exe
 
-server: server.c
-	$(CC) $(CFLAGS) server.c command_utils.c -o server
-
-client: client.c
-	$(CC) $(CFLAGS) client.c -o client
+exe: 
+	${CXX} -c ${CFLAGS} client.c
+	${CXX} -c ${CFLAGS} server.c
+	${CXX} ${CFLAGS} -o client client.o -lm -pthread
+	${CXX} ${CFLAGS} -o server server.o -lm
 
 clean:
-	rm -f server client
+	rm -fr client
+	rm -fr server
+	rm -fr *.o
+	

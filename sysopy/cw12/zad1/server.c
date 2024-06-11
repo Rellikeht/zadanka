@@ -1,273 +1,355 @@
-#include "command_utils.h"
-#include <arpa/inet.h>
 #include <netinet/in.h>
-#include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
-#include <sys/types.h>
-#include <time.h>
 #include <unistd.h>
 
-#define MAX_CLIENTS        10
-#define CLIENT_ID_SIZE     256
-#define MESSAGE_SIZE       256
-#define TOTAL_MESSAGE_SIZE 512
-#define SETID_COMMAND      "SETID"
-#define TO_ALL_COMMAND     "2ALL"
-#define LIST_COMMAND       "LIST\n"
-#define TO_ONE_COMMAND     "2ONE"
-#define STOP_COMMAND       "STOP\n"
+#include "msg_types.h"
 
-struct user {
-    int connected;
-    struct sockaddr_in addr;
-    char *client_id;
-};
+#define UNUSED(x) (void)(x)
 
-char *find_sender(
-    struct user *users, struct sockaddr_in client_addr
-) {
-    for (int j = 0; j < MAX_CLIENTS; j++) {
-        if (users[j].connected != -1 && memcmp(
-                                            &users[j].addr,
-                                            &client_addr,
-                                            sizeof(client_addr)
-                                        ) == 0) {
-            return users[j].client_id;
+volatile int break_loop = FALSE;
+void sigint_handler(int signum) {
+    UNUSED(signum);
+    break_loop = TRUE;
+}
+
+struct client_t clients[MAX_CLIENTS];
+
+int find_free_client() {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].isFree == TRUE) {
+            return i;
         }
     }
-    return NULL;
+    return -1;
+}
+
+void list_clients() {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].isFree == FALSE) {
+            printf(
+                "Username: %s, ID: %d \n", clients[i].username, i
+            );
+        }
+    }
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        printf("Usage: %s IP_ADDRESS PORT\n", argv[0]);
-        exit(1);
-    }
-    int PORT = atoi(argv[2]);
-    char *IP_ADDRESS = argv[1];
-
-    int server_socket_descriptor =
-        socket(AF_INET, SOCK_DGRAM, 0);
-    if (server_socket_descriptor < 0) {
-        perror("Error while creating socket");
-        exit(1);
+    if (argc != 2) {
+        printf("Wrong number of arguments provided. Exiting...\n");
+        return 1;
     }
 
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
+    int PORT = strtol(argv[1], NULL, 10);
+    if (PORT > 0 && PORT <= 1024) {
+        printf("Invalid port number provided. Exiting...\n");
+        return 1;
+    }
+
+    signal(SIGINT, sigint_handler);
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clients[i].isFree = TRUE;
+    }
+
+    struct epoll_event ev, events[MAX_EVENTS];
+    int listen_sock, nfds, epollfd; //, conn_sock;
+
+    listen_sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+    /* Configure it to listen on 12345 port on all available IPs */
+    struct sockaddr_in server_addr = {0};
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr(IP_ADDRESS);
     server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    bind(
+        listen_sock,
+        (struct sockaddr *)&server_addr,
+        sizeof(server_addr)
+    );
 
-    if (bind(
-            server_socket_descriptor,
-            (struct sockaddr *)&server_addr,
-            sizeof(server_addr)
-        ) < 0) {
-        perror("Error while binding socket");
-        close(server_socket_descriptor);
-        exit(1);
+    epollfd = epoll_create1(0);
+    if (epollfd == -1) {
+        perror("epoll_create1");
+        exit(EXIT_FAILURE);
     }
 
-    printf("UDP Server is running on port %d\n", PORT);
+    ev.events = EPOLLIN;
+    ev.data.fd = listen_sock;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_sock, &ev) == -1) {
+        perror("epoll_ctl: listen_sock");
+        exit(EXIT_FAILURE);
+    }
 
-    struct user users[MAX_CLIENTS];
-    struct pollfd poll_fds[1];
+    printf("Successfully created server at port %d.\n", PORT);
 
-    char buffer[MESSAGE_SIZE];
     struct sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
 
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        users[i].connected = -1;
-        users[i].client_id = (char *)malloc(256);
-    }
+    struct message_t buffer;
 
-    poll_fds[0].fd = server_socket_descriptor;
-    poll_fds[0].events = POLLIN;
-
-    while (1) {
-        if (poll(poll_fds, 1, -1) < 0) {
-            perror("error while polling");
-            close(server_socket_descriptor);
-            exit(1);
+    while (break_loop == FALSE) {
+        nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+        if (nfds == -1) {
+            perror("epoll_wait");
         }
 
-        if (poll_fds[0].revents & POLLIN) {
-            memset(buffer, 0, sizeof(buffer));
-            int bytes_read = recvfrom(
-                poll_fds[0].fd,
-                buffer,
-                sizeof(buffer),
-                0,
-                (struct sockaddr *)&client_addr,
-                &addr_len
-            );
-            if (bytes_read <= 0) {
-                if (bytes_read == 0) {
-                    printf("Client disconnected from server\n");
-                    for (int j = 0; j < MAX_CLIENTS; j++) {
-                        if (memcmp(
-                                &users[j].addr,
-                                &client_addr,
-                                sizeof(client_addr)
-                            ) == 0) {
-                            users[j].connected = -1;
-                            break;
-                        }
-                    }
+        for (int n = 0; n < nfds; ++n) {
+            if (break_loop == TRUE)
+                break;
+            if (events[n].data.fd == listen_sock) {
+                ssize_t count = recvfrom(
+                    listen_sock,
+                    &buffer,
+                    sizeof(buffer),
+                    0,
+                    (struct sockaddr *)&client_addr,
+                    &addr_len
+                );
+                if (count == -1) {
+                    perror("recvfrom");
+                    exit(EXIT_FAILURE);
                 } else {
-                    perror(
-                        "Error while reading data from client"
-                    );
-                }
-
-            } else {
-                buffer[bytes_read] = '\0';
-                printf("Received: %s\n", buffer);
-                char *command = get_command(buffer);
-                if (strcmp(command, SETID_COMMAND) == 0) {
-                    for (int j = 0; j < MAX_CLIENTS; j++) {
-                        if (users[j].connected == -1) {
-                            users[j].connected = 1;
-                            memcpy(
-                                &users[j].addr,
-                                &client_addr,
-                                sizeof(client_addr)
+                    int j = 0, k = 0;
+                    switch (buffer.type) {
+                    case USR:
+                        j = find_free_client();
+                        if (j == -1)
+                            printf("Couldn't find free client "
+                                   "socket.\n");
+                        else {
+                            clients[j].isFree = FALSE;
+                            strcpy(
+                                clients[j].username, buffer.message
+                            );
+                            clients[j].address.sin_family =
+                                client_addr.sin_family;
+                            clients[j].address.sin_port =
+                                client_addr.sin_port;
+                            clients[j].address.sin_addr.s_addr =
+                                client_addr.sin_addr.s_addr;
+                            strcpy(
+                                buffer.message,
+                                "Successfully connected to the "
+                                "server.\n"
+                            );
+                            buffer.receiver_socket = j;
+                            sendto(
+                                listen_sock,
+                                &buffer,
+                                sizeof(buffer),
+                                0,
+                                (struct sockaddr *)&clients[j]
+                                    .address,
+                                sizeof(clients[j].address)
+                            );
+                            printf(
+                                "User %s with ID %d successfully "
+                                "connected to the server.\n",
+                                clients[j].username,
+                                j
+                            );
+                        }
+                        break;
+                    case LIST:
+                        printf(
+                            "Recieved LIST request from user %s.\n",
+                            buffer.sender_name
+                        );
+                        list_clients();
+                        buffer.type = DFL;
+                        strcpy(
+                            buffer.message,
+                            "All users have been listed in the "
+                            "server program.\n"
+                        );
+                        sendto(
+                            listen_sock,
+                            &buffer,
+                            sizeof(buffer),
+                            0,
+                            (struct sockaddr *)&client_addr,
+                            sizeof(client_addr)
+                        );
+                        break;
+                    case TO_ALL:
+                        printf(
+                            "Sending message from user %s to all "
+                            "users.\n",
+                            buffer.sender_name
+                        );
+                        for (int i = 0; i < MAX_CLIENTS; i++) {
+                            if (clients[i].isFree == FALSE) {
+                                sendto(
+                                    listen_sock,
+                                    &buffer,
+                                    sizeof(buffer),
+                                    0,
+                                    (struct sockaddr *)&clients[i]
+                                        .address,
+                                    sizeof(clients[i].address)
+                                );
+                            }
+                        }
+                        strcpy(
+                            buffer.message,
+                            "Successfully sent messages to all "
+                            "users.\n"
+                        );
+                        buffer.type = DFL;
+                        sendto(
+                            listen_sock,
+                            &buffer,
+                            sizeof(buffer),
+                            0,
+                            (struct sockaddr *)&client_addr,
+                            sizeof(client_addr)
+                        );
+                        break;
+                    case TO_ONE:
+                        k = buffer.receiver_socket;
+                        if (k < 0 || k >= MAX_CLIENTS ||
+                            clients[k].isFree == TRUE) {
+                            printf("Couldn't find client socket.\n"
                             );
                             strcpy(
-                                users[j].client_id,
-                                get_string_after_command(buffer)
+                                buffer.message,
+                                "Couldn't find client socket."
                             );
-                            break;
+                        } else {
+                            sendto(
+                                listen_sock,
+                                &buffer,
+                                sizeof(buffer),
+                                0,
+                                (struct sockaddr *)&clients[k]
+                                    .address,
+                                sizeof(clients[k].address)
+                            );
+                            strcpy(
+                                buffer.message,
+                                "Successfully sent message to the "
+                                "user.\n"
+                            );
                         }
+                        buffer.type = DFL;
+                        sendto(
+                            listen_sock,
+                            &buffer,
+                            sizeof(buffer),
+                            0,
+                            (struct sockaddr *)&client_addr,
+                            sizeof(client_addr)
+                        );
+                        break;
+                    case STOP:
+                        printf(
+                            "Recieved STOP request from client "
+                            "%d.\n",
+                            buffer.sender_id
+                        );
+                        buffer.type = INTERNAL_EXIT;
+                        sendto(
+                            listen_sock,
+                            &buffer,
+                            sizeof(buffer),
+                            0,
+                            (struct sockaddr *)&client_addr,
+                            sizeof(client_addr)
+                        );
+                        clients[buffer.sender_id].isFree = TRUE;
+                        printf(
+                            "Client %d successfully logged out.\n",
+                            buffer.sender_id
+                        );
+                        break;
+                    case ALIVE:
+                        printf(
+                            "Recieved ALIVE request from client "
+                            "%d.\n",
+                            buffer.sender_id
+                        );
+                        buffer.type = DFL;
+                        strcpy(buffer.message, "PING\n");
+                        for (int i = 0; i < MAX_CLIENTS; i++) {
+                            if (clients[i].isFree == FALSE) {
+                                ssize_t count_m = sendto(
+                                    listen_sock,
+                                    &buffer,
+                                    sizeof(buffer),
+                                    0,
+                                    (struct sockaddr *)&clients[i]
+                                        .address,
+                                    sizeof(clients[i].address)
+                                );
+                                if (count_m < 0) {
+                                    printf(
+                                        "Client %d stopped "
+                                        "responding and will be "
+                                        "removed from clients "
+                                        "list.\n",
+                                        i
+                                    );
+                                    clients[i].isFree = TRUE;
+                                }
+                            }
+                        }
+                        strcpy(
+                            buffer.message,
+                            "All clients have been checked.\n"
+                        );
+                        sendto(
+                            listen_sock,
+                            &buffer,
+                            sizeof(buffer),
+                            0,
+                            (struct sockaddr *)&client_addr,
+                            sizeof(client_addr)
+                        );
+                        break;
+                    case INTERNAL_EXIT:
+                        sendto(
+                            listen_sock,
+                            &buffer,
+                            sizeof(buffer),
+                            0,
+                            (struct sockaddr *)&client_addr,
+                            sizeof(client_addr)
+                        );
+                        break;
+                    default:
+                        break;
                     }
                 }
-
-                else if (strcmp(command, TO_ALL_COMMAND) == 0) {
-                    char sender[CLIENT_ID_SIZE] = {0};
-                    for (int j = 0; j < MAX_CLIENTS; j++) {
-                        if (users[j].connected != -1 &&
-                            memcmp(
-                                &users[j].addr,
-                                &client_addr,
-                                sizeof(client_addr)
-                            ) == 0) {
-                            strcpy(sender, users[j].client_id);
-                            break;
-                        }
-                    }
-
-                    char message[TOTAL_MESSAGE_SIZE];
-                    sprintf(
-                        message,
-                        "%s> %s",
-                        sender,
-                        get_string_after_command(buffer)
-                    );
-                    for (int j = 1; j < MAX_CLIENTS; j++) {
-                        if (users[j].connected != -1 &&
-                            memcmp(
-                                &users[j].addr,
-                                &client_addr,
-                                sizeof(client_addr)
-                            ) != 0) {
-                            sendto(
-                                poll_fds[0].fd,
-                                message,
-                                strlen(message) + 1,
-                                0,
-                                (struct sockaddr *)&users[j]
-                                    .addr,
-                                sizeof(users[j].addr)
-                            );
-                        }
-                    }
-
-                } else if (strcmp(command, TO_ONE_COMMAND) == 0) {
-                    char *message =
-                        get_string_after_param(buffer);
-                    char *recipient =
-                        get_param_after_command(buffer);
-                    char *sender =
-                        find_sender(users, client_addr);
-                    if (sender == NULL) {
-                        printf("Sender not found\n");
-                        continue;
-                    }
-                    char total_message[TOTAL_MESSAGE_SIZE];
-                    time_t t;
-                    time(&t);
-                    char time_str[32];
-                    strcpy(time_str, ctime(&t));
-                    char *end = strchr(time_str, '\n');
-                    if (end != NULL) {
-                        *end = '\0';
-                    }
-                    sprintf(
-                        total_message,
-                        "%s: %s> %s",
-                        time_str,
-                        sender,
-                        message
-                    );
-                    for (int j = 0; j < MAX_CLIENTS; j++) {
-                        if (users[j].connected != -1 &&
-                            strcmp(
-                                users[j].client_id, recipient
-                            ) == 0) {
-                            sendto(
-                                poll_fds[0].fd,
-                                total_message,
-                                strlen(total_message) + 1,
-                                0,
-                                (struct sockaddr *)&users[j]
-                                    .addr,
-                                sizeof(users[j].addr)
-                            );
-                            break;
-                        }
-                    }
-                } else if (strcmp(command, LIST_COMMAND) == 0) {
-                    char message[TOTAL_MESSAGE_SIZE];
-                    strcpy(message, "Users: ");
-                    for (int j = 0; j < MAX_CLIENTS; j++) {
-                        if (users[j].connected != -1) {
-                            strcat(message, users[j].client_id);
-                            strcat(message, " ");
-                        }
-                    }
-                    sendto(
-                        poll_fds[0].fd,
-                        message,
-                        strlen(message) + 1,
-                        0,
-                        (struct sockaddr *)&client_addr,
-                        sizeof(client_addr)
-                    );
-                } else if (strcmp(command, STOP_COMMAND) == 0) {
-                    for (int j = 0; j < MAX_CLIENTS; j++) {
-                        if (memcmp(
-                                &users[j].addr,
-                                &client_addr,
-                                sizeof(client_addr)
-                            ) == 0) {
-                            users[j].connected = -1;
-                            break;
-                        }
-                    }
-                }
-                memset(buffer, 0, sizeof(buffer));
             }
         }
     }
+
+    printf("Closing all clients...\n");
+
+    struct message_t closing_message;
+    closing_message.type = INTERNAL_EXIT;
+
     for (int i = 0; i < MAX_CLIENTS; i++) {
-        free(users[i].client_id);
+        if (clients[i].isFree == FALSE) {
+            sendto(
+                listen_sock,
+                &closing_message,
+                sizeof(closing_message),
+                0,
+                (struct sockaddr *)&clients[i].address,
+                sizeof(clients[i].address)
+            );
+            clients[i].isFree = TRUE;
+        }
     }
-    close(server_socket_descriptor);
+
+    printf("Exiting server program...\n");
+    close(listen_sock);
 
     return 0;
 }
