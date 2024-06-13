@@ -12,13 +12,13 @@
 
 #define UNUSED(x) (void)(x)
 
-int client_sock, in_server_sock;
+int client_sock = 0, in_server_sock = 0;
 struct sockaddr_in server_addr = {0};
-struct message_t in_message, out_message;
-
-char *username;
+struct message_t in_message = {0}, out_message = {0};
+char *username = NULL;
 
 volatile int break_loop_sender = false, break_loop_receiver = false;
+
 void sigint_handler(int signum) {
     UNUSED(signum);
     break_loop_sender = true;
@@ -29,7 +29,7 @@ void *sender_handler(void *args) {
 
     strcpy(out_message.sender_name, username);
     out_message.sender_id = in_server_sock;
-    char cmd[MAX_STRING_LENGTH];
+    char cmd[MAX_STRING_LENGTH] = {0};
     while (break_loop_sender == false) {
         fgets(cmd, MAX_STRING_LENGTH, stdin);
 

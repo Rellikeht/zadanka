@@ -7,10 +7,10 @@ LDFLAGS = -O2 -Wall
 all: clean exe
 
 exe: 
-	${CXX} -c ${CFLAGS} client.c
-	${CXX} -c ${CFLAGS} server.c
-	${CXX} ${CFLAGS} -o client client.o -lm -pthread
-	${CXX} ${CFLAGS} -o server server.o -lm
+	${CC} -c ${CFLAGS} client.c
+	${CC} -c ${CFLAGS} server.c
+	${CC} ${CFLAGS} -o client client.o -lm -pthread
+	${CC} ${CFLAGS} -o server server.o -lm
 
 clean:
 	rm -fr client
