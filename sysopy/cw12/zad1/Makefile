@@ -1,5 +1,6 @@
-CXX = gcc
-CFLAGS = -Wall -Wextra -Wuninitialized -g
+CC = gcc
+CFLAGS = -O2 -std=gnu99 -g -Wall -Wextra -Werror -Wno-variadic-macros
+LDFLAGS = -O2 -Wall
 
 .PHONY: all clean exe
 
@@ -15,4 +16,3 @@ clean:
 	rm -fr client
 	rm -fr server
 	rm -fr *.o
-	

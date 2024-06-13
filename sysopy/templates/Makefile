@@ -7,7 +7,7 @@ EXE = main
 
 .PHONY: all clean exe
 
-all: clean obj exe
+all: clean exe
 
 clean:
 	rm -rf *.o *.so *.a $(EXE)
