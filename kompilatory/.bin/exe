@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+
+# The shittiest possible solution
+NAME=$(
+    dune describe |
+        grep -C1 '(library' |
+        grep -Eo 'name [a-zA-Z0-9]*' |
+        awk '{print $2}'
+)
+
+# exec dune exec "${PWD##*/}" $@
+exec dune exec "$NAME" $@

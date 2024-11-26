@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+
+exec javac "$_SILENT_JAVA_OPTIONS"
