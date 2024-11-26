@@ -40,6 +40,8 @@ _build
 !/sysopy/tests
 
 /mownit/**/*.pdf
+/mownit/**/**/*.html
+/mownit/**/**/*.js
 
 Manifest.toml
 
