@@ -1,7 +1,7 @@
 open Types;;
 (* reexport *)
-type token = Types.token
-let string_of_token = string_of_token;;
+(* type token = Types.token *)
+(* let string_of_token = string_of_token;; *)
 
 (* helpers {{{*)
 
@@ -155,3 +155,14 @@ let scan_line
 
   get_tokens 0
 ;;
+
+let scan_lines () : (token list, string) result =
+(* {{{*)
+  let rec pl (i:int) (tokens: token list): (token list, string) result =
+    try
+      (read_line () |> scan_line i) >>=
+      (fun l -> Ok (List.append tokens l)) >>=
+      pl (i+1)
+    with End_of_file -> Ok tokens
+  in pl 0 []
+;;(* }}}*)

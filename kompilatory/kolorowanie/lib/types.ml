@@ -95,7 +95,7 @@ type token_kind =(* {{{*)
   Int of int           |
   (* Float of float       | *)
   String of string     |
-  Comment of string     |
+  Comment of string    |
   Identifier of string
 
 let string_of_token_kind = function
@@ -136,7 +136,7 @@ type temp_result = (temp_value, string) temp_type
 let token_kind_value = function
   (* {{{*)
   | String v -> String.cat "\"" @@ String.cat v "\""
-  | Comment v -> String.cat "-- " v
+  | Comment v -> String.cat "--" v
   | Break -> "break"
   | Do -> "do"
   | Else -> "else"

@@ -49,6 +49,7 @@ Manifest.toml
 
 !/kompilatory/**/tests/*
 !/kompilatory/.bin/*
+/kompilatory/**/*.pdf
 
 !/tw/.bin/*
 /tw/**/*.html

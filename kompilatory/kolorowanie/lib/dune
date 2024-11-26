@@ -1,6 +1,6 @@
 (library
- ; (public_name utils)
- (name utils)
+ ; (public_name scanner)
+ (name scanner)
  (modules utils types)
  ;
  )
