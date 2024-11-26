@@ -1,0 +1,6 @@
+(executables
+ (public_names scanner colorizer)
+ (names tokenizer colorizer)
+ (libraries utils)
+ ;
+ )
