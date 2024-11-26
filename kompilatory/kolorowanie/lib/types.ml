@@ -52,6 +52,8 @@ type special =(* {{{*)
   Assign         |
   Dot            |
   Comma          |
+  Colon          |
+  Semicolon      |
   LSquare        |
   RSquare        |
   LCurly         |
@@ -63,6 +65,8 @@ let string_of_special = function
   | Assign -> "="
   | Dot -> "."
   | Comma -> ","
+  | Colon -> ":"
+  | Semicolon -> ";"
   | LSquare -> "["
   | RSquare -> "]"
   | LCurly -> "{"
@@ -225,6 +229,8 @@ let parse_special (str: string) (start: int): temp_result =
   | '=' -> Some Assign
   | '.' -> Some Dot
   | ',' -> Some Comma
+  | ':' -> Some Colon
+  | ';' -> Some Semicolon
   | '[' -> Some LSquare
   | ']' -> Some RSquare
   | '{' -> Some LCurly

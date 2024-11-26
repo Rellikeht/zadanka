@@ -11,11 +11,13 @@ let rec repeat (str: string) (n: int) =
 
 let colorize = function
   | String v ->
-    String.cat "#string((\"\\\"" @@
-    String.cat v "\\\"\"))"
+    String.cat "#string(to_string([```\"" @@
+    String.cat v "\"```]))"
   | Comment v ->
-    String.cat "#comment(to_string( [```-- " @@
-    String.cat v "```] ))"
+    String.cat "#comment(to_string(```-- " @@
+    String.cat v "```))"
+    (* String.cat "#comment(to_string([-- " @@ *)
+    (* String.cat v "]))" *)
   | Special v ->
     String.cat "#special(\"" @@
     String.cat (string_of_special v) "\")"
@@ -57,7 +59,7 @@ let rec colorize_tokens
 
 (* printing *)
 
-print_endline {|
+let before = {|
 //#set page(
 //  "a4", margin: (x: 1.6cm, y: 1.9cm), numbering: none,
 //)
@@ -91,14 +93,17 @@ print_endline {|
   inset: (x: 1em, y: 1em), [
 |};;
 
+let after = {|
+  ])
+|};;
+
 match scan_lines () with
-| Ok tokens -> colorize_tokens (0, 0) tokens
+| Ok tokens ->
+  print_endline before;
+  colorize_tokens (0, 0) tokens;
+  print_endline after;
 | Error error -> begin
   print_endline error;
   exit 1
   end
 ;;
-
-print_endline {|
-  ])
-|};;

@@ -1,7 +1,5 @@
 open Types;;
 (* reexport *)
-(* type token = Types.token *)
-(* let string_of_token = string_of_token;; *)
 
 (* helpers {{{*)
 
@@ -14,12 +12,20 @@ let flip f a b = f b a;;
 let bind = Result.bind;;
 let (>>=) = bind;;
 
-let (<=>) (v1: temp_result) (v2: temp_result): temp_result =
+(* let (<=>) (v1: temp_result) (v2: temp_result): temp_result = *)
+(*   match v1 with *)
+(*   | Good v -> Good v *)
+(*   | Bad e -> Bad e *)
+(*   | Continue -> v2 *)
+(* ;; *)
+
+let (<=>) (v1: temp_result) (v2: unit -> temp_result): temp_result =
   match v1 with
   | Good v -> Good v
   | Bad e -> Bad e
-  | Continue -> v2
+  | Continue -> v2 ()
 ;;
+
 
 (* }}}*)
 
@@ -55,7 +61,13 @@ let parse_identifier (input: string) (start: int): temp_result =
 (* {{{*)
   let len = String.length input in
   if is_start input.[start] |> not
-  then Bad "TODO No identifier here"
+  then begin
+    (* print_int start; *)
+    (* print_string " "; *)
+    (* print_endline input; *)
+    (* print_endline ""; *)
+    Bad "TODO No identifier here"
+    end
   else
     let rec gid i =
       if i == len || (is_identifier input.[i] |> not)
@@ -112,13 +124,21 @@ let scan_line
   let get_token (start: int): (token * int, string) temp_type =
     (* {{{*)
     let tkind = 
+      (* parse_int input start <=> *)
+      (* parse_string input start <=> *)
+      (* parse_token_kind input start <=> *)
+      (* parse_comment input start <=> *)
+      (* parse_operator input start <=> *)
+      (* parse_special input start <=> *)
+      (* parse_identifier input start *)
+
       parse_int input start <=>
-      parse_string input start <=>
-      parse_token_kind input start <=>
-      parse_comment input start <=>
-      parse_operator input start <=>
-      parse_special input start <=>
-      parse_identifier input start
+      (fun () -> parse_string input start) <=>
+      (fun () -> parse_token_kind input start) <=>
+      (fun () -> parse_comment input start) <=>
+      (fun () -> parse_operator input start) <=>
+      (fun () -> parse_special input start) <=>
+      (fun () -> parse_identifier input start)
     in
     match tkind with
     | Good (kind, len, value) -> Good ({
@@ -138,11 +158,6 @@ let scan_line
     (* whitespace *)
     else if input.[i] == ' ' || input.[i] == '\t'
     then get_tokens (i+1)
-
-    (* (1* comments *1) *)
-    (* else if i < len-1 && *)
-    (*   input.[i] == '-' && *)
-    (*   input.[i+1] == '-' then Ok [] *)
 
     else
       match get_token i with
