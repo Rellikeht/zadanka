@@ -38,10 +38,12 @@ _build
 /sysopy/**/test*
 !/sysopy/**/test*.sh
 !/sysopy/tests
+/sysopy/**/*.html
 
 /mownit/**/*.pdf
 /mownit/**/**/*.html
 /mownit/**/**/*.js
+/mownit/*/*_files/
 
 Manifest.toml
 
