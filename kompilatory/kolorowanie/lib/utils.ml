@@ -61,13 +61,7 @@ let parse_identifier (input: string) (start: int): temp_result =
 (* {{{*)
   let len = String.length input in
   if is_start input.[start] |> not
-  then begin
-    (* print_int start; *)
-    (* print_string " "; *)
-    (* print_endline input; *)
-    (* print_endline ""; *)
-    Bad "TODO No identifier here"
-    end
+  then Bad "TODO No identifier here"
   else
     let rec gid i =
       if i == len || (is_identifier input.[i] |> not)
@@ -132,7 +126,8 @@ let scan_line
       (* parse_special input start <=> *)
       (* parse_identifier input start *)
 
-      parse_int input start <=>
+      Continue <=>
+      (fun () -> parse_int input start) <=>
       (fun () -> parse_string input start) <=>
       (fun () -> parse_token_kind input start) <=>
       (fun () -> parse_comment input start) <=>

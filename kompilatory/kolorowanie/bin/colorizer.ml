@@ -60,9 +60,6 @@ let rec colorize_tokens
 (* printing *)
 
 let before = {|
-//#set page(
-//  "a4", margin: (x: 1.6cm, y: 1.9cm), numbering: none,
-//)
 #set page(
   margin: (x: 1.6cm, y: 1.9cm), numbering: none,
   width: auto, height: auto,
