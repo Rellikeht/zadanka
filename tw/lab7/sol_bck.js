@@ -16,7 +16,6 @@ class Fork {
           cb();
         } else {
           delay *= 2;
-          console.log(delay);
           tryAcquire();
         }
       }, delay);
@@ -37,6 +36,7 @@ class Philosopher {
   }
 
   startNaive(count) {
+    this.access_time = 0;
     this.accesses = 0;
     const forks = this.forks, f1 = this.f1, f2 = this.f2;
 
@@ -44,10 +44,12 @@ class Philosopher {
       if (remaining === 0)
         return;
       this.accesses += 1;
+      this.access_time -= performance.now();
       console.log(`Filozof ${this.id} podnosi pierwszy widelec.`);
       forks[f1].acquire(() => {
         console.log(`Filozof ${this.id} podnosi drugi widelec.`);
         forks[f2].acquire(() => {
+          this.access_time += performance.now();
           console.log(`Filozof ${this.id} je.`);
           setTimeout(() => {
             forks[f1].release();
@@ -62,6 +64,7 @@ class Philosopher {
   }
 
   startAsym(count) {
+    this.access_time = 0;
     this.accesses = 0;
     const forks = this.forks;
     const [f1, f2] =
@@ -71,8 +74,10 @@ class Philosopher {
       if (remaining === 0)
         return;
       this.accesses += 1;
+      this.access_time -= performance.now();
       forks[f1].acquire(() => {
         forks[f2].acquire(() => {
+          this.access_time += performance.now();
           console.log(`Filozof ${this.id} je.`);
           setTimeout(() => {
             forks[f1].release();
@@ -87,6 +92,7 @@ class Philosopher {
   }
 
   startConductor(count) {
+    this.access_time = 0;
     this.accesses = 0;
     const forks = this.forks;
     const conductor = Philosopher.conductor;
@@ -96,9 +102,11 @@ class Philosopher {
         return;
 
       this.accesses += 1;
+      this.access_time -= performance.now();
       conductor.acquire(() => {
         forks[this.f1].acquire(() => {
           forks[this.f2].acquire(() => {
+            this.access_time += performance.now();
             console.log(`Filozof ${this.id} je.`);
             setTimeout(() => {
               forks[this.f1].release();
@@ -166,10 +174,22 @@ if (process.argv[2] === "1") {
   for (let i = 0; i < N; i++) {
     philosophers[i].startAsym(rounds);
   }
+  let avg_access_time = 0;
+  for (let i = 0; i < N; i++) {
+    avg_access_time += philosophers[i].access_time / avg_access_time;
+  }
+  avg_access_time /= N;
+  console.log("Średni czas dostępu:", avg_access_time, "\n");
 } else {
 
   console.log("\nRozwiązanie z kelnerem:");
   for (let i = 0; i < N; i++) {
     philosophers[i].startConductor(rounds);
   }
+  let avg_access_time = 0;
+  for (let i = 0; i < N; i++) {
+    avg_access_time += philosophers[i].access_time / avg_access_time;
+  }
+  avg_access_time /= N;
+  console.log("Średni czas dostępu:", avg_access_time, "\n");
 }
