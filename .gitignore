@@ -21,6 +21,7 @@
 .settings/
 .direnv/
 _build
+target/
 
 *.out
 *.class

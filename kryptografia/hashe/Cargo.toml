@@ -1,0 +1,11 @@
+[package]
+name = "hashe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+md5 = "0.1"
+
+[[bin]]
+name = "hashe"
+path = "hashe.rs"
