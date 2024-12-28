@@ -3,9 +3,18 @@ name = "hashe"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+codegen-units = 1
+lto = "fat"
+strip = "symbols"
+
 [dependencies]
 md5 = "0.1"
 
-[[bin]]
+[lib]
 name = "hashe"
 path = "hashe.rs"
+
+[[bin]]
+name = "main"
+path = "main.rs"
