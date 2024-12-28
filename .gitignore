@@ -22,6 +22,7 @@
 .direnv/
 _build
 target/
+META-INF
 
 *.out
 *.class
