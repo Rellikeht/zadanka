@@ -34,14 +34,19 @@ pub fn main() {
         CHAIN_LENGTH,
         password_length, //
     );
+    // println!("{:?}", table.keys().collect::<Vec<_>>());
 
     let mut cracked = 0;
     for i in 0..usize::pow(10, password_length) {
         let pass = gen_pass(i, password_length);
         let hash = md5::compute(pass.as_bytes());
         let lookup = lookup_in_rainbow_table(&table, CHAIN_LENGTH, password_length, &hash);
-        if lookup.is_some() {
-            cracked += 1;
+        match lookup {
+            Some(p) => {
+                cracked += 1;
+                // println!("{} {}", pass, p);
+            }
+            None => {}
         }
     }
     println!("{}", cracked);

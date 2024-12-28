@@ -5,13 +5,16 @@ use std::collections::HashMap;
 type HashType = [u8; 16];
 type PassType = String;
 
-fn reduction(pass: &HashType, password_length: u32, pos: usize) -> PassType {
-    let asnum = u128::from_le_bytes(*pass);
-    return format!("{}", (asnum + pos as u128) % u128::pow(10, password_length));
-}
-
 pub fn gen_pass(i: usize, length: u32) -> PassType {
     return format!("{0:0len$}", i, len = length as usize);
+}
+
+fn reduction(pass: &HashType, password_length: u32, pos: usize) -> PassType {
+    let asnum = u128::from_le_bytes(*pass);
+    let digits = u128::pow(10, password_length);
+    let num = (asnum + pos as u128 + 1) % digits;
+    return gen_pass(num as usize, password_length);
+    // return format!("{}", num);
 }
 
 pub fn generate_rainbow_table(
@@ -22,11 +25,10 @@ pub fn generate_rainbow_table(
     let mut map = HashMap::with_capacity(chains);
     for i in 0..chains {
         let start_pass = gen_pass(i, pass_length);
-        let mut cur_pass = start_pass.clone();
-        let mut cur_hash: HashType = HashType::default();
-        for j in 0..chain_length {
+        let mut cur_hash: HashType = md5::compute(start_pass.as_bytes());
+        for j in 1..chain_length {
+            let cur_pass = reduction(&cur_hash, pass_length, j);
             cur_hash = md5::compute(cur_pass.as_bytes());
-            cur_pass = reduction(&cur_hash, pass_length, j);
         }
         map.insert(cur_hash, start_pass);
     }
@@ -40,17 +42,17 @@ pub fn lookup_in_rainbow_table(
     target_hash: &HashType,
 ) -> Option<PassType> {
     for (_, start) in table.iter() {
-        let cur_hash = md5::compute(start.as_bytes());
+        let mut cur_hash = md5::compute(start.as_bytes());
         if cur_hash == *target_hash {
             return Some(start.clone());
         }
-        let mut cur_pass: String = reduction(&cur_hash, pass_length, 0);
+        let mut cur_pass: String;
         for i in 1..chain_length {
-            let cur_hash = md5::compute(cur_pass.as_bytes());
+            cur_pass = reduction(&cur_hash, pass_length, i - 1);
+            cur_hash = md5::compute(cur_pass.as_bytes());
             if cur_hash == *target_hash {
                 return Some(cur_pass);
             }
-            cur_pass = reduction(&cur_hash, pass_length, i);
         }
     }
     return None;
