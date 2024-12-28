@@ -6,7 +6,7 @@ type HashType = [u8; 16];
 type PassType = String;
 
 fn reduction(pass: &HashType, password_length: u32, pos: usize) -> PassType {
-    let asnum = u128::from_ne_bytes(*pass);
+    let asnum = u128::from_le_bytes(*pass);
     return format!("{}", (asnum + pos as u128) % u128::pow(10, password_length));
 }
 

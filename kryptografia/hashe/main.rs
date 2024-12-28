@@ -20,12 +20,14 @@ const CHARSET: [u8; 10] = {
 pub fn main() {
     let args: Vec<String> = env::args().collect();
     let password_length: u32;
+    let num_chains: usize;
     if args.len() > 1 {
         password_length = args[1].parse().unwrap();
+        num_chains = NUM_CHAINS * usize::pow(10, password_length) / usize::pow(10, PASSWORD_LENGTH);
     } else {
         password_length = PASSWORD_LENGTH;
+        num_chains = NUM_CHAINS;
     }
-    let num_chains = NUM_CHAINS * usize::pow(10, password_length) / usize::pow(10, PASSWORD_LENGTH);
 
     let table = generate_rainbow_table(
         num_chains,
