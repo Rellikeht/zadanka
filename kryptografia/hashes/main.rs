@@ -1,6 +1,6 @@
 use std::{env, usize};
 
-use hashe::*;
+use hashes::*;
 
 const CHAIN_LENGTH: usize = 100;
 const NUM_CHAINS: usize = 50;

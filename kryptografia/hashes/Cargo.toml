@@ -1,5 +1,5 @@
 [package]
-name = "hashe"
+name = "hashes"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,8 +12,8 @@ strip = "symbols"
 md5 = "0.1"
 
 [lib]
-name = "hashe"
-path = "hashe.rs"
+name = "hashes"
+path = "hashes.rs"
 
 [[bin]]
 name = "main"
