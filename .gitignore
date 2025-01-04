@@ -57,3 +57,6 @@ Manifest.toml
 /tw/**/*.html
 /tw/*/*_files/*.js
 /tw/**/*.jpg
+/tw/**/*.png
+/tw/**/*.dot
+!/tw/**/tests/*
