@@ -11,7 +11,11 @@ struct Monoid
             result = new(
                 Set(names),
                 Dict([
-                    name => Set() for name in names
+                    name => begin
+                        result = Set()
+                        sizehint!(result, div(length(non_commuting), 2))
+                        result
+                    end for name in names
                 ])
             )
             for (f, s) in non_commuting
@@ -73,17 +77,16 @@ function foata(
     return result
 end
 
+function foata_part_string(part::AbstractVector{S}) where {S<:AbstractString}
+    "(" * join(part, " ") * ")"
+end
+
 function foata_string(
     monoid::Monoid,
     word::AbstractVector{S}
 )::String where {S<:AbstractString}
     fvect::Vector{Vector{String}} = foata(monoid, word)
-    return join(
-        map(fvect) do v
-            "(" * join(v, " ") * ")"
-        end,
-        ""
-    )
+    return join(map(foata_part_string, fvect), "")
 end
 
 struct Graph
@@ -98,6 +101,7 @@ function reduce!(graph::Graph, id::Int, start::Int)
     end
 end
 
+# https://cs.stackexchange.com/a/29133
 function reduce!(graph::Graph)
     for (id, neighbours) in graph.connections
         for neighbour in neighbours
@@ -110,8 +114,10 @@ function gen_sigma(
     A::AbstractVecOrSet{S}
 )::Dict{String,Set{String}} where {S<:AbstractString}
     result::Dict{String,Set{String}} = Dict()
+    sizehint!(result, length(A))
     for e in A
         push!(result, e => Set())
+        sizehint!(result[e], length(A))
     end
     for e1 in A
         for e2 in A
@@ -124,7 +130,7 @@ end
 
 function invert_commutation(
     A::AbstractVecOrSet{S1},
-    IorD::AbstractVecOrSet{NTuple{2,S2}}
+    IorD::AbstractVector{NTuple{2,S2}}
 )::Dict{String,Set{String}} where {S1<:AbstractString,S2<:AbstractString}
     result::Dict{String,Set{String}} = gen_sigma(A)
     for (f, s) in IorD
@@ -135,32 +141,59 @@ end
 
 function invert_commutation(
     A::AbstractVecOrSet{S1},
-    IorD::AbstractDict{S2,<:AbstractSet{S3}}
-)::Dict{String,Set{String}} where {
-    S1<:AbstractString,S2<:AbstractString,S3<:AbstractString
-}
-    result::Dict{String,Set{String}} = gen_sigma(A)
-    for (f, s) in IorD
-        setdiff!(result[f], s)
+    IorD::AbstractSet{NTuple{2,S2}}
+)::Dict{String,Set{String}} where {S1<:AbstractString,S2<:AbstractString}
+    result::Dict{String,Set{String}} = Dict()
+    sizehint!(result, length(A))
+    for e1 in A
+        push!(result, e1 => Set())
+        sizehint!(result[e1], length(A))
+        for e2 in A
+            if !((e1, e2) in IorD)
+                push!(result[e1], e2)
+            end
+        end
     end
     return result
 end
 
+function invert_commutation(
+    A::AbstractVecOrSet{S1},
+    IorD::AbstractDict{S2,<:AbstractSet{S3}}
+)::Dict{String,Set{String}} where {
+    S1<:AbstractString,S2<:AbstractString,S3<:AbstractString
+}
+    result::Dict{String,Set{String}} = Dict()
+    sizehint!(result, length(A)^2 - length(IorD) + 1)
+    for e1 in A
+        push!(result, e1 => Set())
+        sizehint!(result[e1], length(A))
+        for e2 in A
+            if !(e2 in IorD[e1])
+                push!(result[e1], e2)
+            end
+        end
+    end
+    return result
+end
 
 function invert_commutation(monoid::Monoid)::Dict{String,Set{String}}
     invert_commutation(monoid.names, monoid.non_commuting)
 end
 
-function diekert(
+function almost_diekert(
     monoid::Monoid,
     word::AbstractVector{S}
 )::Graph where {S<:AbstractString}
     result::Graph = Graph(Dict(), Dict())
     D::Dict{String,Set{String}} = invert_commutation(monoid)
     id::Int = 0
+    sizehint!(result.labels, length(word))
+    sizehint!(result.connections, length(word))
     for part in word
         push!(result.labels, id => part)
         push!(result.connections, id => Set())
+        sizehint!(result.connections[id], length(word) - id)
         id += 1
     end
     for i in 0:id-1
@@ -170,6 +203,14 @@ function diekert(
             end
         end
     end
+    return result
+end
+
+function diekert(
+    monoid::Monoid,
+    word::AbstractVector{S}
+)::Graph where {S<:AbstractString}
+    result::Graph = almost_diekert(monoid, word)
     reduce!(result)
     return result
 end
@@ -194,9 +235,10 @@ let
     w = split("baadcb", "")
     monoid = Monoid(A, I)
     println(foata_string(monoid, w))
-    open("ex1.dot", "w") do f
-        write(f, to_dot(diekert(monoid, w)))
-    end
+    diekert = almost_diekert(monoid, w)
+    open("ex1_unoptimized.dot", "w") do f write(f, to_dot(diekert)) end
+    reduce!(diekert)
+    open("ex1.dot", "w") do f write(f, to_dot(diekert)) end
 end
 
 let
@@ -219,20 +261,125 @@ let
     end
 end
 
-let
-    A = ["pić", "jeść", "spać"]
-    I = [
-        ("pić", "jeść")
-    ]
-    w = ["pić", "jeść", "spać", "pić", "jeść", "spać"]
-    monoid = Monoid(A, I)
-    println(foata_string(monoid, w))
-end
-
 function generate_pngs(names::Vector{String})
     for name in names
         open(replace(name, r"\.[^.]*$" => ".png"), "w") do file
             run(pipeline(`dot -Tpng $name`, stdout=file))
         end
     end
+end
+
+function printSnow(
+    io::IO,
+    snow::Dict{S,<:AbstractVector{M}}
+) where {S<:AbstractString,M<:AbstractMarker}
+    names::Vector{String} = snow |> keys |> collect
+    for name in sort(names)
+        print(io, "$name | ")
+        layer::String =
+            map(snow[name]) do m
+                if m isa Marker
+                    return "*"
+                else
+                    return name
+                end
+            end |> join
+        print(io, "$layer")
+        println(io)
+        # println(io, "let it snow")
+    end
+end
+
+function printSnow(
+    snow::Dict{S,<:AbstractVector{M}}
+) where {S<:AbstractString,M<:AbstractMarker}
+    printSnow(stdout, snow)
+end
+
+function foata_printing(
+    io::IO,
+    monoid::Monoid,
+    word::AbstractVector{S}
+)::String where {S<:AbstractString}
+    result::String = ""
+    snow::Dict{String,Vector{AbstractMarker}} = Dict([
+        key => [] for key in monoid.names
+    ])
+    println(io, "Snowing:")
+
+    for l1 in Iterators.reverse(word)
+        printSnow(io, snow)
+        println(io)
+        push!(snow[l1], Letter())
+        for (l2, layer) in snow
+            if l2 == l1 || l2 in monoid.non_commuting[l1]
+                continue
+            end
+            push!(layer, Marker())
+        end
+    end
+
+    printSnow(io, snow)
+    println(io)
+    println(io, "Removing:")
+    left::Int = length(word)
+
+    while left > 0
+        part::Vector{String} = []
+        for (letter, layer) in snow
+            if length(layer) > 0 && layer[end] isa Letter
+                left -= 1
+                push!(part, letter)
+                pop!(layer)
+            end
+        end
+        for l1 in part
+            for (l2, layer) in snow
+                if l2 == l1 || l2 in monoid.non_commuting[l1]
+                    continue
+                end
+                pop!(layer)
+            end
+        end
+        part_str::String = foata_part_string(part)
+        result *= part_str
+        println(io)
+        printSnow(io, snow)
+        println(io, part_str)
+    end
+
+    println(io)
+    return result
+end
+
+function foata_printing(
+    monoid::Monoid,
+    word::AbstractVector{S}
+)::String where {S<:AbstractString}
+    foata_printing(stdout, monoid, word)
+end
+
+let
+    A = ["a", "b", "c", "d", "e", "f"]
+    I = [
+        ("a", "d"),
+        ("d", "a"),
+        ("b", "e"),
+        ("e", "b"),
+        ("c", "d"),
+        ("d", "c"),
+        ("c", "f"),
+        ("f", "c"),
+    ]
+    w = split("acdcfbbe", "")
+    monoid = Monoid(A, I)
+    open("snowing", "w") do file
+        result = foata_printing(file, monoid, w)
+        println(file, "Result:")
+        println(file, result)
+    end
+    diekert = almost_diekert(monoid, w)
+    open("ex2_unoptimized.dot", "w") do f write(f, to_dot(diekert)) end
+    reduce!(diekert)
+    open("ex2.dot", "w") do f write(f, to_dot(diekert)) end
 end
