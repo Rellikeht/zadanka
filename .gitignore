@@ -23,6 +23,10 @@
 _build
 target/
 META-INF
+.gradle
+!gradle/wrapper/gradle-wrapper.jar
+build/
+kls_database.db
 
 *.out
 *.class
