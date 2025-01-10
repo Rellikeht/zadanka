@@ -27,6 +27,7 @@ META-INF
 !gradle/wrapper/gradle-wrapper.jar
 build/
 kls_database.db
+.metals
 
 *.out
 *.class

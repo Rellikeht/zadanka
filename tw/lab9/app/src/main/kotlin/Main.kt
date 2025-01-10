@@ -1,6 +1,6 @@
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.*
-import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.selects.*
 
 fun zad1(N: Int) = runBlocking {
     var ins = arrayOf<Channel<Boolean>>()
@@ -30,7 +30,7 @@ fun zad1(N: Int) = runBlocking {
     // producer
     launch {
         while (true) {
-            select<Unit> {
+            selectUnbiased<Unit> {
                 for (i in 0 ..< N) {
                     ins[i].onSend(true) {}
                 }
