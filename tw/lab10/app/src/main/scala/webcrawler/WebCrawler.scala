@@ -1,13 +1,11 @@
 package webcrawler
 
-import java.nio.file.FileAlreadyExistsException
-
 object WebCrawler {
   import scala.io.Source
   import org.htmlcleaner.HtmlCleaner
   import java.net.URL
-  import java.nio.file.Paths
-  import java.nio.file.Files
+  import java.nio.file.{Paths, Files}
+  import java.nio.file.FileAlreadyExistsException
   import scala.collection.mutable
 
   private val defaultLevel = 2
