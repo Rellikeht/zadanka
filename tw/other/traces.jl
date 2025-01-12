@@ -1,4 +1,5 @@
 const AbstractVecOrSet{T} = Union{AbstractVector{T},AbstractSet{T}}
+const Connections = Dict{Int,Set{Int}}
 
 struct Monoid
     names::Set{String}
@@ -33,6 +34,11 @@ struct Monoid
         )
 end
 
+struct Graph
+    labels::Dict{Int,String}
+    connections::Dict{Int,Set{Int}}
+end
+
 abstract type AbstractMarker end
 struct Marker <: AbstractMarker end
 struct Letter <: AbstractMarker end
@@ -43,7 +49,11 @@ function foata(
 )::Vector{Vector{String}} where {S<:AbstractString}
     result::Vector{Vector{String}} = []
     snow::Dict{String,Vector{AbstractMarker}} = Dict([
-        key => [] for key in monoid.names
+        key => begin
+            vec::Vector{AbstractMarker} = []
+            sizehint!(vec, length(word))
+            vec
+        end for key in monoid.names
     ])
     for l1 in Iterators.reverse(word)
         push!(snow[l1], Letter())
@@ -77,28 +87,48 @@ function foata(
     return result
 end
 
+function foata(
+    monoid::Monoid,
+    diekert_graph::Graph
+)::Vector{Vector{String}}
+    connections::Connections = deepcopy(diekert_graph.connections)
+    parts::Vector{Vector{String}} = []
+    while length(connections) > 0
+        push!(parts, map(entrances!(connections)) do e
+            diekert_graph.labels[e]
+        end)
+    end
+    return parts
+end
+
+function entrances!(
+    connections::Connections
+)::Vector{Int}
+    result::Vector{Int} = []
+    nonfree::Set{Int} = Set()
+    for k in sort(collect(keys(connections)))
+        union!(nonfree, connections[k])
+        if k in nonfree
+            continue
+        end
+        push!(result, k)
+    end
+    for k in result
+        delete!(connections, k)
+    end
+    return result
+end
+
 function foata_part_string(part::AbstractVector{S}) where {S<:AbstractString}
     "(" * join(part, " ") * ")"
 end
 
 function foata_string(
     monoid::Monoid,
-    word::AbstractVector{S}
+    word::Union{AbstractVector{S},Graph}
 )::String where {S<:AbstractString}
     fvect::Vector{Vector{String}} = foata(monoid, word)
     return join(map(foata_part_string, fvect), "")
-end
-
-struct Graph
-    labels::Dict{Int,String}
-    connections::Dict{Int,Set{Int}}
-end
-
-function reduce!(graph::Graph, id::Int, start::Int)
-    for neighbour in graph.connections[start]
-        delete!(graph.connections[id], neighbour)
-        reduce!(graph, id, neighbour)
-    end
 end
 
 # https://cs.stackexchange.com/a/29133
@@ -107,6 +137,13 @@ function reduce!(graph::Graph)
         for neighbour in neighbours
             reduce!(graph, id, neighbour)
         end
+    end
+end
+
+function reduce!(graph::Graph, id::Int, start::Int)
+    for neighbour in graph.connections[start]
+        delete!(graph.connections[id], neighbour)
+        reduce!(graph, id, neighbour)
     end
 end
 
@@ -186,10 +223,10 @@ function almost_diekert(
     word::AbstractVector{S}
 )::Graph where {S<:AbstractString}
     result::Graph = Graph(Dict(), Dict())
-    D::Dict{String,Set{String}} = invert_commutation(monoid)
-    id::Int = 0
     sizehint!(result.labels, length(word))
     sizehint!(result.connections, length(word))
+    D::Dict{String,Set{String}} = invert_commutation(monoid)
+    id::Int = 0
     for part in word
         push!(result.labels, id => part)
         push!(result.connections, id => Set())
@@ -227,38 +264,6 @@ function to_dot(graph::Graph)::String
         result *= "$id[label=$name]\n"
     end
     return result * "}\n"
-end
-
-let
-    A = ["a", "b", "c", "d"]
-    I = [("a", "d"), ("d", "a"), ("b", "c"), ("c", "b")]
-    w = split("baadcb", "")
-    monoid = Monoid(A, I)
-    println(foata_string(monoid, w))
-    diekert = almost_diekert(monoid, w)
-    open("ex1_unoptimized.dot", "w") do f write(f, to_dot(diekert)) end
-    reduce!(diekert)
-    open("ex1.dot", "w") do f write(f, to_dot(diekert)) end
-end
-
-let
-    A = ["a", "b", "c", "d", "e", "f"]
-    I = [
-        ("a", "d"),
-        ("d", "a"),
-        ("b", "e"),
-        ("e", "b"),
-        ("c", "d"),
-        ("d", "c"),
-        ("c", "f"),
-        ("f", "c"),
-    ]
-    w = split("acdcfbbe", "")
-    monoid = Monoid(A, I)
-    println(foata_string(monoid, w))
-    open("ex2.dot", "w") do f
-        write(f, to_dot(diekert(monoid, w)))
-    end
 end
 
 function generate_pngs(names::Vector{String})
@@ -303,7 +308,11 @@ function foata_printing(
 )::String where {S<:AbstractString}
     result::String = ""
     snow::Dict{String,Vector{AbstractMarker}} = Dict([
-        key => [] for key in monoid.names
+        key => begin
+            vec::Vector{AbstractMarker} = []
+            sizehint!(vec, length(word))
+            vec
+        end for key in monoid.names
     ])
     println(io, "Snowing:")
 
@@ -359,6 +368,74 @@ function foata_printing(
     foata_printing(stdout, monoid, word)
 end
 
+function pretty_commutation(D::Dict{String,Set{String}})::String
+    result::String = "D = {"
+    for k in D |> keys |> collect |> sort
+        for v in D[k] |> collect |> sort
+            result *= "($k, $v), "
+        end
+    end
+    result = result[begin:end-2]
+    return result * "}"
+end
+
+function generate_png(names::Vector{S}) where {S<:AbstractString}
+    foreach(generate_png, names)
+end
+
+function generate_png(name::AbstractString)
+    open(replace(name, r"\.[^.]*$" => ".png"), "w") do file
+        run(pipeline(`dot -Tpng $name`, stdout=file))
+    end
+end
+
+let
+    A = ["a", "b", "c", "d"]
+    I = [("a", "d"), ("d", "a"), ("b", "c"), ("c", "b")]
+    w = split("baadcb", "")
+    monoid = Monoid(A, I)
+    D = invert_commutation(A, I)
+    println(pretty_commutation(D))
+    println()
+    println(foata_string(monoid, w))
+    println()
+    dgraph = diekert(monoid, w)
+    println(foata_string(monoid, dgraph))
+    fname = "ex1.dot"
+    open(fname, "w") do f
+        write(f, to_dot(dgraph))
+    end
+    generate_png(fname)
+end
+
+let
+    A = ["a", "b", "c", "d", "e", "f"]
+    I = [
+        ("a", "d"),
+        ("d", "a"),
+        ("b", "e"),
+        ("e", "b"),
+        ("c", "d"),
+        ("d", "c"),
+        ("c", "f"),
+        ("f", "c"),
+    ]
+    w = split("acdcfbbe", "")
+    monoid = Monoid(A, I)
+    D = invert_commutation(A, I)
+    println(pretty_commutation(D))
+    println()
+    println(foata_string(monoid, w))
+    println()
+    dgraph = diekert(monoid, w)
+    println(foata_string(monoid, dgraph))
+    fname = "ex2.dot"
+    open(fname, "w") do f
+        write(f, to_dot(dgraph))
+    end
+    generate_png(fname)
+end
+
 let
     A = ["a", "b", "c", "d", "e", "f"]
     I = [
@@ -379,7 +456,11 @@ let
         println(file, result)
     end
     diekert = almost_diekert(monoid, w)
-    open("ex2_unoptimized.dot", "w") do f write(f, to_dot(diekert)) end
+    open("ex2_unoptimized.dot", "w") do f
+        write(f, to_dot(diekert))
+    end
     reduce!(diekert)
-    open("ex2.dot", "w") do f write(f, to_dot(diekert)) end
+    open("ex2.dot", "w") do f
+        write(f, to_dot(diekert))
+    end
 end
