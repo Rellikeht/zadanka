@@ -1,4 +1,4 @@
-import Base: +, -, *, ^, zero
+import Base: +, -, *, ^
 using Polynomials
 __revise_mode__ = :eval
 
@@ -80,8 +80,6 @@ macro ZnWOp(name)
     op = esc(name)
     return quote
         function $op($a::ZnW{$N}, $b::ZnW{$N}) where {$N}
-            println($a)
-            println($b)
             @assert a.W == b.W
             ZnW{$N}(($op)($a.x, $b.x), $a.W)
         end
@@ -100,11 +98,7 @@ end
 @ZnWOp(*)
 
 function Base.zero(::Type{ZnW{N}}) where {N}
-    return ZnW{N}(zero(Poly), one(Poly))
-end
-
-function Base.zero(::ZnW{N}) where {N}
-    return ZnW{N}(zero(Poly), one(Poly))
+    return ZnW{N}(zero(Poly), zero(Poly))
 end
 
 let
@@ -124,5 +118,5 @@ let
     println(6 * zw3)
     println(zw3 * 5)
     println(zw2 - zw3)
-    zero(ZnW{17})
+    zero(ZnW{17,(1, 0, 0, 0, 1)})
 end
