@@ -7,9 +7,12 @@ object WebCrawler {
   import java.nio.file.{Paths, Files}
   import java.nio.file.FileAlreadyExistsException
   import scala.collection.mutable
+  import scala.concurrent.ExecutionContext.Implicits.global
+  import scala.concurrent.{Future, Await}
+  import scala.concurrent.duration._
 
   private val defaultLevel = 2
-  private val visited = mutable.Set[String]()
+  private val visited = mutable.HashSet[String]()
   private val path = Paths.get(".", "html_files")
   if (Files.exists(path)) {
     if (!Files.isDirectory(path)) {
@@ -20,8 +23,7 @@ object WebCrawler {
   } else Files.createDirectory(path)
 
   private def download(url: String, level: Int): Unit = {
-    // println(url)
-    if (level <= 0 || visited(url)) return
+    if (level <= 0 || visited.synchronized { visited(url) }) return
     visited += url
     println("visiting " + url)
 
@@ -30,7 +32,6 @@ object WebCrawler {
         .replace("https://", "")
         .replace("http://", "")
         .replace("/", "_")
-      // println(cleanUrl)
       val fpath = Paths.get(path.normalize().toString(), cleanUrl)
       val html = Source.fromURL(url)
       val htmlString = html.mkString
@@ -41,10 +42,11 @@ object WebCrawler {
       val rootNode = cleaner.clean(htmlString)
 
       val elements = rootNode.getElementsByName("a", true)
-      elements map { elem =>
+      val futures = elements.map(elem => {
         val url = elem.getAttributeByName("href")
-        download(url, level - 1)
-      }
+        Future { download(url, level - 1) }
+      })
+      futures.map({ elem => Await.result(elem, Duration.Inf) })
     } catch {
       case e: Exception => return
     }
@@ -57,8 +59,12 @@ object WebCrawler {
 
 object App {
   def main(args: Array[String]): Unit = {
-    val url = "http://google.com"
-    // val url = "https://suckless.org"
+    val url = if (args.length > 1) {
+      args(1)
+    } else {
+      // "https://suckless.org"
+      "http://google.com"
+    }
 
     if (args.length > 0) {
       WebCrawler.crawl(url, args(0).toInt)
