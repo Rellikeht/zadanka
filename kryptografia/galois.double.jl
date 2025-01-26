@@ -1,5 +1,5 @@
 using Polynomials: PolynomialContainerTypes
-import Base: +, -, *, ^
+import Base: +, -, *, ^, ==
 using Polynomials
 __revise_mode__ = :eval
 
@@ -125,8 +125,8 @@ end
 @ZnWOp(-)
 @ZnWOp(*)
 
-function Base.zero(::Type{ZnW{N,W}}) where {N,W}
-    return ZnW{N,W}(zero(Poly))
+function (==)(a::ZnW{N,W}, b::ZnW{N,W})::Bool where {N,W}
+    return a.x == b.x
 end
 
 let
@@ -146,5 +146,7 @@ let
     println(6 * zw3)
     println(zw3 * 5)
     println(zw2 - zw3)
-    zero(ZnW{17,(1, 0, 0, 0, 1)})
+    @assert zw1 == zw1
+    @assert zw1 != zw2
+    # zero(ZnW{17,(1, 0, 0, 0, 1)})
 end
