@@ -1,6 +1,6 @@
-using Polynomials: PolynomialContainerTypes
-import Base: +, -, *, ^, ==
 using Polynomials
+using Random
+import Base: +, -, *, ^, ==, rand, zero
 __revise_mode__ = :eval
 
 # Integer ring
@@ -129,6 +129,37 @@ function (==)(a::ZnW{N,W}, b::ZnW{N,W})::Bool where {N,W}
     return a.x == b.x
 end
 
+# Because fucking matmul doesn't work without this
+Base.zero(::Type{ZnW{N,W}}) where {N,W} = ZnW{N,W}(zero(Poly))
+Base.zero(::ZnW{N,W}) where {N,W} = ZnW{N,W}(zero(Poly))
+
+function rand(::Type{ZnW{N,W}}) where {N,W}
+    ZnW{N,W}(Poly(rand(Int, N)))
+end
+function rand(rng::AbstractRNG, ::Type{ZnW{N,W}}) where {N,W}
+    ZnW{N,W}(Poly(rand(rng, Int, N)))
+end
+
+function rand(type::Type{ZnW{N,W}}, dims::M...) where {N,W,M<:Integer}
+    # why there isn't function to create array
+    # using function for element
+    # result = Array{type,length(dims)}(undef, dims...)
+    result = zeros(type, dims...)
+    map!(result, result) do _
+        rand(type)
+    end
+    return result
+end
+function rand(
+    rng::AbstractRNG, type::Type{ZnW{N,W}}, dims::M...
+) where {N,W,M<:Integer}
+    result = zeros(type, dims...)
+    map!(result) do _
+        rand(rng, type)
+    end
+    return result
+end
+
 let
     x1 = reverse([7, 0, 0, 14, 0, 0, 0])
     x2 = reverse([24, 0, -5, -7, 13])
@@ -148,5 +179,4 @@ let
     println(zw2 - zw3)
     @assert zw1 == zw1
     @assert zw1 != zw2
-    # zero(ZnW{17,(1, 0, 0, 0, 1)})
 end
