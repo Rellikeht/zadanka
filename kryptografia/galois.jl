@@ -1,4 +1,5 @@
-import Base: +, -, *, ^, zero
+using Polynomials: PolynomialContainerTypes
+import Base: +, -, *, ^
 using Polynomials
 __revise_mode__ = :eval
 
@@ -52,43 +53,68 @@ end
 # Polynomial ring
 
 const Poly = Polynomial{Int,:x}
-struct ZnW{N}
+const PolyContainers{M,I} = Union{Vector{I},NTuple{M,I}}
+struct ZnW{N,W}
     x::Poly
-    W::Poly
-    function ZnW(x::Poly, N::Int, W::Poly)
-        new{N}(map(y -> (y + N * abs(y)) % N, x % W), W)
+    w::Poly
+    function ZnW{N,W}(x::Poly, w::Poly) where {N,W}
+        @assert Poly(W) == w
+        new{N,W}(map(y -> (y + N * abs(y)) % N, x % w), w)
     end
-    function ZnW(x::Vector{Int}, N::Int, W::Vector{Int})
-        ZnW(Poly(x), N, Poly(W))
+    function ZnW{N,W}(x::Poly) where {N,W}
+        ZnW{N,W}(x, Poly(W))
     end
-    function ZnW{N}(x::Poly, W::Poly) where {N}
-        ZnW(x, N, W)
+    function ZnW{N,W}(x::PolyContainers{M,I}) where {N,W,M,I}
+        ZnW{N,W}(Poly(x))
     end
-    function ZnW{N}(x::Vector{Int}, W::Vector{Int}) where {N}
-        ZnW(Poly(x), N, Poly(W))
+
+    function ZnW{N,W}(x::Poly, w::PolyContainers{M,I}) where {N,W,M,I<:Integer}
+        ZnW{N,W}(x, Poly(w))
     end
-    function ZnW{N}(x::Poly, W::Vector{Int}) where {N}
-        ZnW(x, N, Poly(W))
+    function ZnW{N,W}(x::PolyContainers{M,I}, w::T) where {N,W,M,I<:Integer,T}
+        ZnW{N,W}(Poly(x), w)
     end
-    function ZnW{N}(x::Vector{Int}, W::Poly) where {N}
-        ZnW(Poly(x), N, W)
+
+    function ZnW{N}(x::Poly, w::Poly) where {N}
+        ZnW{N,tuple(w...)}(x, w)
+    end
+    function ZnW{N}(x::PolyContainers{M,I}, w::Poly) where {N,M,I<:Integer}
+        ZnW{N,tuple(w...)}(Poly(x), w)
+    end
+    function ZnW{N}(x::T, w::PolyContainers{M,I}) where {N,M,I<:Integer,T}
+        ZnW{N,tuple(w...)}(x, Poly(w))
+    end
+
+    function ZnW(x::Poly, n::N, w::Poly) where {N<:Integer}
+        ZnW{n,tuple(w...)}(x, w)
+    end
+    function ZnW(
+        x::PolyContainers{M,I},
+        n::N,
+        w::Poly
+    ) where {M,I<:Integer,N<:Integer}
+        ZnW{n,tuple(w...)}(Poly(x), w)
+    end
+    function ZnW(
+        x::T,
+        n::N,
+        w::PolyContainers{M,I}
+    ) where {M,I<:Integer,N<:Integer,T}
+        ZnW{n,tuple(w...)}(Poly(x), w)
     end
 end
 
 macro ZnWOp(name)
-    a, b, N = esc.([:a, :b, :N])
+    a, b, N, W = esc.([:a, :b, :N, :W])
     op = esc(name)
     return quote
-        function $op($a::ZnW{$N}, $b::ZnW{$N}) where {$N}
-            println($a)
-            println($b)
-            @assert a.W == b.W
-            ZnW{$N}(($op)($a.x, $b.x), $a.W)
+        function $op($a::ZnW{$N,$W}, $b::ZnW{$N,$W}) where {$N,$W}
+            ZnW{$N,$W}(($op)($a.x, $b.x), $a.w)
         end
-        function $op($a::ZnW{$N}, $b::Int) where {$N}
-            ZnW{$N}(($op)($a.x, $b), $a.W)
+        function $op($a::ZnW{$N,$W}, $b::Int) where {$N,$W}
+            ZnW{$N,$W}(($op)($a.x, $b), $a.w)
         end
-        function $op($a::Int, $b::ZnW{$N}) where {$N}
+        function $op($a::Int, $b::ZnW{$N,$W}) where {$N,$W}
             ($op)(b, a)
         end
     end
@@ -99,12 +125,8 @@ end
 @ZnWOp(-)
 @ZnWOp(*)
 
-function Base.zero(::Type{ZnW{N}}) where {N}
-    return ZnW{N}(zero(Poly), one(Poly))
-end
-
-function Base.zero(::ZnW{N}) where {N}
-    return ZnW{N}(zero(Poly), one(Poly))
+function Base.zero(::Type{ZnW{N,W}}) where {N,W}
+    return ZnW{N,W}(zero(Poly))
 end
 
 let
@@ -124,5 +146,5 @@ let
     println(6 * zw3)
     println(zw3 * 5)
     println(zw2 - zw3)
-    zero(ZnW{17})
+    zero(ZnW{17,(1, 0, 0, 0, 1)})
 end

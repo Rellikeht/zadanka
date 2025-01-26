@@ -1,3 +1,4 @@
+using Polynomials: PolynomialContainerTypes
 import Base: +, -, *, ^
 using Polynomials
 __revise_mode__ = :eval
@@ -37,17 +38,6 @@ end
 @ZnOp(*)
 @ZnOp(^, (x, y) -> powermod(x, y, N))
 
-# In case above doesn't work
-# function ^(a::Zn{N}, b::Int) where {N}
-#     Zn{N}(powermod(a.x, b, N))
-# end
-# function ^(a::Int, b::Zn{N}) where {N}
-#     b^a
-# end
-# function ^(a::Zn{N}, b::Zn{N}) where {N}
-#     Zn{N}(powermod(a.x, b.x, N))
-# end
-
 let
     x = Zn(2, 7)
     y = Zn(10, 7)
@@ -63,49 +53,54 @@ end
 # Polynomial ring
 
 const Poly = Polynomial{Int,:x}
+const PolyContainers{M,I} = Union{Vector{I},NTuple{M,I}}
 struct ZnW{N,W}
     x::Poly
     w::Poly
     function ZnW{N,W}(x::Poly, w::Poly) where {N,W}
+        @assert Poly(W) == w
         new{N,W}(map(y -> (y + N * abs(y)) % N, x % w), w)
-    end
-    function ZnW(x::Poly, N::Int, w::NTuple{M,Int}) where {M}
-        ZnW{N,w}(x, Poly(w))
     end
     function ZnW{N,W}(x::Poly) where {N,W}
         ZnW{N,W}(x, Poly(W))
     end
-    function ZnW(
-        x::Union{Vector{Int},NTuple{M1,Int}},
-        N::Int,
-        w::NTuple{M2,Int}
-    ) where {M1,M2}
-        ZnW{N,w}(x, Poly(w))
+    function ZnW{N,W}(x::PolyContainers{M,I}) where {N,W,M,I}
+        ZnW{N,W}(Poly(x))
     end
-    function ZnW(
-        x::Union{Vector{Int},NTuple{M,Int}},
-        N::Int,
-        w::Vector{Int}
-    ) where {M}
-        ZnW{N,tuple(w...)}(Poly(x), Poly(w))
+
+    function ZnW{N,W}(x::Poly, w::PolyContainers{M,I}) where {N,W,M,I<:Integer}
+        ZnW{N,W}(x, Poly(w))
     end
-    function ZnW(x::Poly, N::Int, w::Poly)
-        ZnW{N,tuple(w...)}(x, w)
+    function ZnW{N,W}(x::PolyContainers{M,I}, w::T) where {N,W,M,I<:Integer,T}
+        ZnW{N,W}(Poly(x), w)
     end
+
     function ZnW{N}(x::Poly, w::Poly) where {N}
         ZnW{N,tuple(w...)}(x, w)
     end
-    function ZnW{N}(
-        x::Union{Vector{Int},NTuple{M1,Int}},
-        w::NTuple{M2,Int}
-    ) where {N,M1,M2}
-        ZnW{N,w}(x, w)
+    function ZnW{N}(x::PolyContainers{M,I}, w::Poly) where {N,M,I<:Integer}
+        ZnW{N,tuple(w...)}(Poly(x), w)
     end
-    function ZnW{N}(
-        x::Union{Vector{Int},NTuple{M,Int}},
-        w::Vector{Int}
-    ) where {N,M}
-        ZnW{N,tuple(w...)}(x, w)
+    function ZnW{N}(x::T, w::PolyContainers{M,I}) where {N,M,I<:Integer,T}
+        ZnW{N,tuple(w...)}(x, Poly(w))
+    end
+
+    function ZnW(x::Poly, n::N, w::Poly) where {N<:Integer}
+        ZnW{n,tuple(w...)}(x, w)
+    end
+    function ZnW(
+        x::PolyContainers{M,I},
+        n::N,
+        w::Poly
+    ) where {M,I<:Integer,N<:Integer}
+        ZnW{n,tuple(w...)}(Poly(x), w)
+    end
+    function ZnW(
+        x::T,
+        n::N,
+        w::PolyContainers{M,I}
+    ) where {M,I<:Integer,N<:Integer,T}
+        ZnW{n,tuple(w...)}(Poly(x), w)
     end
 end
 
