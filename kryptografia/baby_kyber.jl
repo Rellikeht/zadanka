@@ -2,8 +2,8 @@ include("galois.jl")
 import Base: zero
 __revise_mode__ = :eval
 
-const N = 17
-const W = (1, 0, 0, 0, 1)
+const TestN = 17
+const TestW = (1, 0, 0, 0, 1)
 
 # Because fucking matmul doesn't work without this
 Base.zero(::Type{ZnW{N,W}}) where {N,W} = ZnW{N,W}(zero(Poly))
@@ -11,40 +11,75 @@ Base.zero(::ZnW{N,W}) where {N,W} = ZnW{N,W}(zero(Poly))
 
 function key_gen(
     A::AbstractMatrix{ZnW{N,W}},
-    s::NTuple{2,ZnW{N,W}},
-    e::NTuple{2,ZnW{N,W}},
-)::Tuple{Matrix{ZnW{N,W}},Vector{ZnW{N,W}},NTuple{2,ZnW{N,W}}} where {N,W}
-    return (A, A * [s[1]; s[2]] + [e[1]; e[2]], s)
+    s::AbstractVector{ZnW{N,W}},
+    e::AbstractVector{ZnW{N,W}},
+)::Vector{ZnW{N,W}} where {N,W}
+    return A * s + e
 end
 
 function key_gen_test()
     A = [
-        ZnW{N}([11, 16, 16, 6], W) ZnW{N}([3, 6, 4, 9], W);
-        ZnW{N}([1, 10, 3, 5], W) ZnW{N}([15, 9, 1, 6], W)
+        ZnW{TestN}([11, 16, 16, 6], TestW) ZnW{TestN}([3, 6, 4, 9], TestW);
+        ZnW{TestN}([1, 10, 3, 5], TestW) ZnW{TestN}([15, 9, 1, 6], TestW)
     ]
-    s = (
-        ZnW{N}([0, 1, -1, -1], W),
-        ZnW{N}([0, -1, 0, -1], W),
-    )
-    e = (
-        ZnW{N}([0, 0, 1], W),
-        ZnW{N}([0, -1, 1], W),
-    )
-    (_, t, _) = key_gen(A, s, e)
+    s = [
+        ZnW{TestN}([0, 1, -1, -1], TestW),
+        ZnW{TestN}([0, -1, 0, -1], TestW),
+    ]
+    e = [
+        ZnW{TestN}([0, 0, 1], TestW),
+        ZnW{TestN}([0, -1, 1], TestW),
+    ]
+    t = key_gen(A, s, e)
     @assert t == [
-        ZnW{N,W}([7, 0, 15, 16]),
-        ZnW{N,W}([6, 11, 12, 10])
+        ZnW{TestN,TestW}([7, 0, 15, 16]),
+        ZnW{TestN,TestW}([6, 11, 12, 10])
     ]
 end
 
 function encrypt(
     A::AbstractMatrix{ZnW{N,W}},
     t::AbstractVector{ZnW{N,W}},
-    m::Polynomial{<:Integer,:x}
-)::Tuple{Vector{Poly},Poly} where {N,W}
+    m::Polynomial{I,:x}
+)::Tuple{Vector{Poly},Poly} where {N,W,I<:Integer}
+    r::Poly = Poly(rand(-1:1, 2))
+    e1::Poly = Poly(rand(-1:1, 2))
+    e2::Poly = Poly(rand(-1:1))
+
     # TODO
+    return ([], Poly([]))
 end
 
-function decrypt(u::AbstractVector{Poly},v::Poly)::Poly
+function decrypt(
+    u::AbstractVector{Poly},
+    v::Poly,
+    s::AbstractVector{ZnW{N,W}}
+)::Poly where {N,W}
     # TODO
+    return Poly([])
+end
+
+function test(amount::N=1000) where {N<:Integer}
+    A = [
+        ZnW{TestN}([11, 16, 16, 6], TestW) ZnW{TestN}([3, 6, 4, 9], TestW);
+        ZnW{TestN}([1, 10, 3, 5], TestW) ZnW{TestN}([15, 9, 1, 6], TestW)
+    ]
+    s = [
+        ZnW{TestN}([0, 1, -1, -1], TestW),
+        ZnW{TestN}([0, -1, 0, -1], TestW),
+    ]
+    e = [
+        ZnW{TestN}([0, 0, 1], TestW),
+        ZnW{TestN}([0, -1, 1], TestW),
+    ]
+    t = key_gen(A, s, e)
+
+    success::Int = 0
+    for _ in 1:amount
+        m = Polynomial(rand(Bool, 4))
+        u, v = encrypt(A, t, m)
+        decrypted = decrypt(u, v, s)
+        success += decrypted == m
+    end
+    println("Success rate: $(success / amount)")
 end
