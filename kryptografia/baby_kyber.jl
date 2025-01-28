@@ -1,8 +1,17 @@
 include("galois.jl")
+using Random
 __revise_mode__ = :eval
 
 const TestN = 17
 const TestW = (1, 0, 0, 0, 1)
+
+function nonzero_rand(range::OrdinalRange, n::Int)
+    result::Vector{Int} = rand(range, n)
+    while reduce(|, result) == 0
+        rand!(result, range)
+    end
+    return result
+end
 
 function gen_key_data(
     k::N1, n::N2, w::NTuple{M,N3}
@@ -11,8 +20,8 @@ function gen_key_data(
     (
         rand(ZnW{n,w}, k, k),
         # TODO distribution
-        rand(ZnW{n,w}, k, k),
-        rand(ZnW{n,w}, k, k)
+        rand(ZnW{n,w}, k),
+        rand(ZnW{n,w}, k)
     )
 end
 
@@ -47,28 +56,28 @@ end
 function encrypt(
     A::AbstractMatrix{ZnW{N,W}},
     t::AbstractVector{ZnW{N,W}},
-    m::Polynomial{I,:x},
+    m::ZnW{N,W},
     r::AbstractVector{ZnW{N,W}},
     e1::AbstractVector{ZnW{N,W}},
     e2::ZnW{N,W},
-)::Tuple{Vector{ZnW{N,W}},ZnW{N,W}} where {N,W,I<:Integer}
-    u::Vector{ZnW{N,W}} = transpose(A) * r + e1
-    v::Vector{ZnW{N,W}} = transpose(t) * r + e2 # TODO what the fuck
-    return ([], Poly([]))
+)::Tuple{Vector{ZnW{N,W}},ZnW{N,W}} where {N,W}
+    u::Vector{ZnW{N,W}} = permutedims(A) * r + e1
+    q2::Int = div(N, 2) + 1
+    v::ZnW{N,W} = (permutedims(t)*r)[1] + e2 + q2 * m
+    return (u, v)
 end
 
-# TODO k
+# TODO distribution
 function encrypt(
     A::AbstractMatrix{ZnW{N,W}},
     t::AbstractVector{ZnW{N,W}},
-    m::Polynomial{I,:x}
-)::Tuple{Vector{Poly},Poly} where {N,W,I<:Integer}
-    r::Vector{Poly} = Poly(rand(-1:1, 2))
-    e1::Vector{Poly} = Poly(rand(-1:1, 2))
-    e2::Poly = Poly(rand(-1:1))
-    u::Vector{Poly} = transpose(A) * r + e1
-    # TODO
-    return ([], Poly([]))
+    m::ZnW{N,W}
+)::Tuple{Vector{ZnW{N,W}},ZnW{N,W}} where {N,W}
+    k::Int = size(t)
+    r::Vector{ZnW{N,W}} = Poly(rand(-1:1, k))
+    e1::Vector{ZnW{N,W}} = Poly(rand(-1:1, k))
+    e2::ZnW{N,W} = Poly(rand(-1:1))
+    return encrypt(A, t, m, r, e1, e2)
 end
 
 function encrypt_test()
@@ -85,17 +94,34 @@ function encrypt_test()
         ZnW{TestN}([0, -1, 1], TestW),
     ]
     t = key_gen(A, s, e)
-    m = Poly([1, 1, 0, 1])
+    r = [
+        ZnW{TestN}([0, 0, 1, -1], TestW),
+        ZnW{TestN}([-1, 0, 1, 1], TestW),
+    ]
+    e1 = [
+        ZnW{TestN}([0, 1, 1], TestW),
+        ZnW{TestN}([0, 0, 1], TestW),
+    ]
+    e2 = ZnW{TestN,TestW}([0, 0, -1, -1])
+    m = ZnW{TestN,TestW}([1, 1, 0, 1])
+    result = encrypt(A, t, m, r, e1, e2)
+    # println(result)
+    @assert result == ([
+            ZnW{TestN,TestW}([3, 10, 11, 11]),
+            ZnW{TestN,TestW}([11, 13, 4, 4]),
+        ],
+        ZnW{TestN,TestW}([16, 9, 6, 8]),
+    )
 end
 
 # TODO k
 function decrypt(
-    u::AbstractVector{Poly},
-    v::Poly,
+    u::AbstractVector{ZnW{N,W}},
+    v::ZnW{N,W},
     s::AbstractVector{ZnW{N,W}}
-)::Poly where {N,W}
+)::ZnW{N,W} where {N,W}
     # TODO
-    return Poly([])
+    return ZnW{N,W}([])
 end
 
 function test(amount::N=1000) where {N<:Integer}

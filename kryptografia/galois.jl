@@ -134,10 +134,10 @@ Base.zero(::Type{ZnW{N,W}}) where {N,W} = ZnW{N,W}(zero(Poly))
 Base.zero(::ZnW{N,W}) where {N,W} = ZnW{N,W}(zero(Poly))
 
 function rand(::Type{ZnW{N,W}}) where {N,W}
-    ZnW{N,W}(Poly(rand(Int, N)))
+    ZnW{N,W}(Poly(rand(0:N-1, N)))
 end
 function rand(rng::AbstractRNG, ::Type{ZnW{N,W}}) where {N,W}
-    ZnW{N,W}(Poly(rand(rng, Int, N)))
+    ZnW{N,W}(Poly(rand(rng, 0:N-1, N)))
 end
 
 function rand(type::Type{ZnW{N,W}}, dims::M...) where {N,W,M<:Integer}
