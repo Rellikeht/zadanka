@@ -35,22 +35,26 @@ end
 
 function key_gen_test()
     A = [
-        ZnW{TestN}([11, 16, 16, 6], TestW) ZnW{TestN}([3, 6, 4, 9], TestW);
-        ZnW{TestN}([1, 10, 3, 5], TestW) ZnW{TestN}([15, 9, 1, 6], TestW)
+        ZnW{TestN,TestW}([11, 16, 16, 6]) ZnW{TestN,TestW}([3, 6, 4, 9]);
+        ZnW{TestN,TestW}([1, 10, 3, 5]) ZnW{TestN,TestW}([15, 9, 1, 6])
     ]
     s = [
-        ZnW{TestN}([0, 1, -1, -1], TestW),
-        ZnW{TestN}([0, -1, 0, -1], TestW),
+        ZnW{TestN,TestW}([0, 1, -1, -1]),
+        ZnW{TestN,TestW}([0, -1, 0, -1]),
     ]
     e = [
-        ZnW{TestN}([0, 0, 1], TestW),
-        ZnW{TestN}([0, -1, 1], TestW),
+        ZnW{TestN,TestW}([0, 0, 1]),
+        ZnW{TestN,TestW}([0, -1, 1]),
     ]
     t = key_gen(A, s, e)
     @assert t == [
         ZnW{TestN,TestW}([7, 0, 15, 16]),
         ZnW{TestN,TestW}([6, 11, 12, 10])
     ]
+end
+
+function div2(N::Int)::Int
+    return div(N, 2) + 1
 end
 
 function encrypt(
@@ -62,8 +66,7 @@ function encrypt(
     e2::ZnW{N,W},
 )::Tuple{Vector{ZnW{N,W}},ZnW{N,W}} where {N,W}
     u::Vector{ZnW{N,W}} = permutedims(A) * r + e1
-    q2::Int = div(N, 2) + 1
-    v::ZnW{N,W} = (permutedims(t)*r)[1] + e2 + q2 * m
+    v::ZnW{N,W} = (permutedims(t)*r)[1] + e2 + div2(N) * m
     return (u, v)
 end
 
@@ -82,25 +85,25 @@ end
 
 function encrypt_test()
     A = [
-        ZnW{TestN}([11, 16, 16, 6], TestW) ZnW{TestN}([3, 6, 4, 9], TestW);
-        ZnW{TestN}([1, 10, 3, 5], TestW) ZnW{TestN}([15, 9, 1, 6], TestW)
+        ZnW{TestN,TestW}([11, 16, 16, 6]) ZnW{TestN,TestW}([3, 6, 4, 9]);
+        ZnW{TestN,TestW}([1, 10, 3, 5]) ZnW{TestN,TestW}([15, 9, 1, 6])
     ]
     s = [
-        ZnW{TestN}([0, 1, -1, -1], TestW),
-        ZnW{TestN}([0, -1, 0, -1], TestW),
+        ZnW{TestN,TestW}([0, 1, -1, -1]),
+        ZnW{TestN,TestW}([0, -1, 0, -1]),
     ]
     e = [
-        ZnW{TestN}([0, 0, 1], TestW),
-        ZnW{TestN}([0, -1, 1], TestW),
+        ZnW{TestN,TestW}([0, 0, 1]),
+        ZnW{TestN,TestW}([0, -1, 1]),
     ]
     t = key_gen(A, s, e)
     r = [
-        ZnW{TestN}([0, 0, 1, -1], TestW),
-        ZnW{TestN}([-1, 0, 1, 1], TestW),
+        ZnW{TestN,TestW}([0, 0, 1, -1]),
+        ZnW{TestN,TestW}([-1, 0, 1, 1]),
     ]
     e1 = [
-        ZnW{TestN}([0, 1, 1], TestW),
-        ZnW{TestN}([0, 0, 1], TestW),
+        ZnW{TestN,TestW}([0, 1, 1]),
+        ZnW{TestN,TestW}([0, 0, 1]),
     ]
     e2 = ZnW{TestN,TestW}([0, 0, -1, -1])
     m = ZnW{TestN,TestW}([1, 1, 0, 1])
@@ -114,28 +117,51 @@ function encrypt_test()
     )
 end
 
-# TODO k
+function threshold(N::Int, x::Int)::Int
+    return Int(x - div2(div2(N)) < div2(N))
+end
+
+function threshold(N::Int, p::Poly)::Poly
+    threshold.(N, p.coeffs)
+end
+
 function decrypt(
     u::AbstractVector{ZnW{N,W}},
     v::ZnW{N,W},
     s::AbstractVector{ZnW{N,W}}
 )::ZnW{N,W} where {N,W}
-    # TODO
-    return ZnW{N,W}([])
+    result::ZnW{N,W} = v - (permutedims(s)*u)[1]
+    return ZnW{N,W}(threshold(N, result.x))
 end
+
+function decrypt_test()
+    s = [
+        ZnW{TestN,TestW}([0, 1, -1, -1]),
+        ZnW{TestN,TestW}([0, -1, 0, -1]),
+    ]
+    u = [
+        ZnW{TestN,TestW}([3, 10, 11, 11]),
+        ZnW{TestN,TestW}([11, 13, 4, 4]),
+    ]
+    v = ZnW{TestN,TestW}([16, 9, 6, 8])
+    result = decrypt(u, v, s)
+    println(result)
+    @assert result == ZnW{TestN,TestW}([1, 1, 0, 1])
+end
+
 
 function test(amount::N=1000) where {N<:Integer}
     A = [
-        ZnW{TestN}([11, 16, 16, 6], TestW) ZnW{TestN}([3, 6, 4, 9], TestW);
-        ZnW{TestN}([1, 10, 3, 5], TestW) ZnW{TestN}([15, 9, 1, 6], TestW)
+        ZnW{TestN,TestW}([11, 16, 16, 6]) ZnW{TestN,TestW}([3, 6, 4, 9]);
+        ZnW{TestN,TestW}([1, 10, 3, 5]) ZnW{TestN,TestW}([15, 9, 1, 6])
     ]
     s = [
-        ZnW{TestN}([0, 1, -1, -1], TestW),
-        ZnW{TestN}([0, -1, 0, -1], TestW),
+        ZnW{TestN,TestW}([0, 1, -1, -1]),
+        ZnW{TestN,TestW}([0, -1, 0, -1]),
     ]
     e = [
-        ZnW{TestN}([0, 0, 1], TestW),
-        ZnW{TestN}([0, -1, 1], TestW),
+        ZnW{TestN,TestW}([0, 0, 1]),
+        ZnW{TestN,TestW}([0, -1, 1]),
     ]
     t = key_gen(A, s, e)
 
