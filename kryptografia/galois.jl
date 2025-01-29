@@ -53,54 +53,51 @@ end
 # Polynomial ring
 
 const Poly = Polynomial{Int,:x}
+const Polys::Dict = Dict()
+function get_poly(w::NTuple{M,I})::Poly where {M,I<:Integer}
+    if !haskey(Polys, w)
+        Polys[w] = Poly(w)
+    end
+    return Polys[w]
+end
+
 const PolyContainers{M,I} = Union{Vector{I},NTuple{M,I}}
 struct ZnW{N,W}
     x::Poly
-    w::Poly
-    function ZnW{N,W}(x::Poly, w::Poly) where {N,W}
-        @assert Poly(W) == w
-        new{N,W}(map(y -> (y + N * abs(y)) % N, x % w), w)
-    end
     function ZnW{N,W}(x::Poly) where {N,W}
-        ZnW{N,W}(x, Poly(W))
+        w::Poly = get_poly(W)
+        new{N,W}(map(y -> (y + N * abs(y)) % N, x % w))
     end
     function ZnW{N,W}(x::PolyContainers{M,I}) where {N,W,M,I}
         ZnW{N,W}(Poly(x))
     end
 
-    function ZnW{N,W}(x::Poly, w::PolyContainers{M,I}) where {N,W,M,I<:Integer}
-        ZnW{N,W}(x, Poly(w))
-    end
-    function ZnW{N,W}(x::PolyContainers{M,I}, w::T) where {N,W,M,I<:Integer,T}
-        ZnW{N,W}(Poly(x), w)
-    end
-
     function ZnW{N}(x::Poly, w::Poly) where {N}
-        ZnW{N,tuple(w...)}(x, w)
+        ZnW{N,tuple(w...)}(x)
     end
     function ZnW{N}(x::PolyContainers{M,I}, w::Poly) where {N,M,I<:Integer}
-        ZnW{N,tuple(w...)}(Poly(x), w)
+        ZnW{N,tuple(w...)}(Poly(x))
     end
     function ZnW{N}(x::T, w::PolyContainers{M,I}) where {N,M,I<:Integer,T}
-        ZnW{N,tuple(w...)}(x, Poly(w))
+        ZnW{N,tuple(w...)}(x)
     end
 
     function ZnW(x::Poly, n::N, w::Poly) where {N<:Integer}
-        ZnW{n,tuple(w...)}(x, w)
+        ZnW{n,tuple(w...)}(x)
     end
     function ZnW(
         x::PolyContainers{M,I},
         n::N,
         w::Poly
     ) where {M,I<:Integer,N<:Integer}
-        ZnW{n,tuple(w...)}(Poly(x), w)
+        ZnW{n,tuple(w...)}(Poly(x))
     end
     function ZnW(
         x::T,
         n::N,
         w::PolyContainers{M,I}
     ) where {M,I<:Integer,N<:Integer,T}
-        ZnW{n,tuple(w...)}(Poly(x), w)
+        ZnW{n,tuple(w...)}(Poly(x))
     end
 end
 
@@ -109,10 +106,10 @@ macro ZnWOp(name)
     op = esc(name)
     return quote
         function $op($a::ZnW{$N,$W}, $b::ZnW{$N,$W}) where {$N,$W}
-            ZnW{$N,$W}(($op)($a.x, $b.x), $a.w)
+            ZnW{$N,$W}(($op)($a.x, $b.x))
         end
         function $op($a::ZnW{$N,$W}, $b::Int) where {$N,$W}
-            ZnW{$N,$W}(($op)($a.x, $b), $a.w)
+            ZnW{$N,$W}(($op)($a.x, $b))
         end
         function $op($a::Int, $b::ZnW{$N,$W}) where {$N,$W}
             ($op)(b, a)
@@ -134,10 +131,10 @@ Base.zero(::Type{ZnW{N,W}}) where {N,W} = ZnW{N,W}(zero(Poly))
 Base.zero(::ZnW{N,W}) where {N,W} = ZnW{N,W}(zero(Poly))
 
 function rand(::Type{ZnW{N,W}}) where {N,W}
-    ZnW{N,W}(Poly(rand(0:N-1, N)))
+    ZnW{N,W}(Poly(rand(0:N-1, length(W) - 1)))
 end
 function rand(rng::AbstractRNG, ::Type{ZnW{N,W}}) where {N,W}
-    ZnW{N,W}(Poly(rand(rng, 0:N-1, N)))
+    ZnW{N,W}(Poly(rand(rng, 0:N-1, length(W) - 1)))
 end
 
 function rand(type::Type{ZnW{N,W}}, dims::M...) where {N,W,M<:Integer}
@@ -154,7 +151,7 @@ function rand(
     rng::AbstractRNG, type::Type{ZnW{N,W}}, dims::M...
 ) where {N,W,M<:Integer}
     result = zeros(type, dims...)
-    map!(result) do _
+    map!(result, result) do _
         rand(rng, type)
     end
     return result
