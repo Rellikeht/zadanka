@@ -5,16 +5,33 @@ __revise_mode__ = :eval
 const TestN = 17
 const TestW = (1, 0, 0, 0, 1)
 const TestZnW = ZnW{TestN,TestW}
-const B1 = [1, -1, 0, 0, 0, 0, 0, 0, 0, 0]
+B1::Vector{Int} = [1, -1, 0, 0, 0, 0, 0, 0, 0, 0]
+# B1::Vector{Int} = [1, -1, 1, -1, 1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+function nz_rand(rng::AbstractRNG, t::T, dims::Int...) where {T}
+    result = rand(rng, t, dims...)
+    while allequal(iszero, result)
+        rand!(rng, result, t)
+    end
+    return result
+end
+
+function nz_rand(t::T, dims::Int...) where {T}
+    result = rand(t, dims...)
+    while allequal(iszero, result)
+        rand!(result, t)
+    end
+    return result
+end
 
 function key_gen(
-    k::N1, n::N2, w::NTuple{M,N3}
-)::Tuple{Matrix{ZnW{n,w}},Vector{ZnW{n,w}},Vector{ZnW{n,w}}} where
+    k::N1, N::N2, W::NTuple{M,N3}
+)::Tuple{Matrix{ZnW{N,W}},Vector{ZnW{N,W}},Vector{ZnW{N,W}}} where
 {N1<:Integer,N2<:Integer,N3<:Integer,M}
-    m::Int = length(w)
-    A = rand(ZnW{n,w}, k, k)
-    s = ZnW{n,w}.((_ -> rand(B1, m)).(1:k))
-    return A, key_gen(A, s, ZnW{n,w}.((_ -> rand(B1, m)).(1:k))), s
+    n::Int = length(W) - 1
+    A = rand(ZnW{N,W}, k, k)
+    s = ZnW{N,W}.((_ -> nz_rand(B1, n)).(1:k))
+    return A, key_gen(A, s, ZnW{N,W}.((_ -> nz_rand(B1, n)).(1:k))), s
 end
 
 function key_gen(
@@ -68,10 +85,10 @@ function encrypt(
     m::ZnW{N,W}
 )::Tuple{Vector{ZnW{N,W}},ZnW{N,W}} where {N,W}
     k::Int = size(t)[1]
-    n::Int = length(W)
-    r::Vector{ZnW{N,W}} = ZnW{N,W}.((_ -> rand(B1, n)).(1:k))
-    e1::Vector{ZnW{N,W}} = ZnW{N,W}.((_ -> rand(B1, n)).(1:k))
-    e2::ZnW{N,W} = ZnW{N,W}(rand(B1, n))
+    n::Int = length(W) - 1
+    r::Vector{ZnW{N,W}} = ZnW{N,W}.((_ -> nz_rand(B1, n)).(1:k))
+    e1::Vector{ZnW{N,W}} = ZnW{N,W}.((_ -> nz_rand(B1, n)).(1:k))
+    e2::ZnW{N,W} = ZnW{N,W}(nz_rand(B1, n))
     return encrypt(A, t, m, r, e1, e2)
 end
 
@@ -127,7 +144,6 @@ function decrypt(
     s::AbstractVector{ZnW{N,W}}
 )::ZnW{N,W} where {N,W}
     result::ZnW{N,W} = v - (permutedims(s)*u)[1]
-    println(result)
     return ZnW{N,W}(threshold(N, result.x))
 end
 
@@ -153,7 +169,7 @@ function test(amount::N=1000) where {N<:Integer}
         m = TestZnW(rand(RandomDevice(), Bool, 4))
         u, v = encrypt(A, t, m)
         decrypted = decrypt(u, v, s)
-        println(m.x.coeffs, " -> ", decrypted.x.coeffs)
+        # println(m.x.coeffs, " -> ", decrypted.x.coeffs)
         success += Int(decrypted == m)
     end
     println("Success rate: $(success / amount * 100)")
