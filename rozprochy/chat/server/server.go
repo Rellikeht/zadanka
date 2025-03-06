@@ -10,7 +10,7 @@ import (
 
 type UserInfo = struct {
 	nick   string
-	writer *bufio.Writer
+	socket *net.Conn
 }
 
 type Message = struct {
@@ -31,20 +31,19 @@ func main() {
 
 	// zarządzanie użytkownikami (i przesyłanie dalej wiadomości)
 	go func() {
-		users := make(map[string]*bufio.Writer)
+		users := make(map[string]*net.Conn)
 		for {
 			select {
 			case user := <-userIn:
 				fmt.Fprintln(os.Stderr, user.nick+" dołączył")
-				users[user.nick] = user.writer
+				users[user.nick] = user.socket
 			case nick := <-userOut:
 				fmt.Fprintln(os.Stderr, nick+" wyszedł")
 				delete(users, nick)
 			case message := <-messages:
-				for receiver, writer := range users {
+				for receiver, socket := range users {
 					if message.sender != receiver {
-						fmt.Fprintln(os.Stderr, message.sender+" - "+receiver)
-						writer.WriteString(message.sender + ": " + message.content)
+						(*socket).Write([]byte(message.sender + ": " + message.content))
 					}
 				}
 			}
@@ -60,16 +59,15 @@ func main() {
 		// Wątek do obsługi połączenia z nowo połączonym klientem
 		go func() {
 			reader := bufio.NewReader(clientSocket)
-			writer := bufio.NewWriter(clientSocket)
 
 			nick, err := reader.ReadString('\n')
 			if err != nil {
 				log.Fatal(err)
 			}
 			nick = nick[:len(nick)-1]
-			userIn <- UserInfo{nick, writer}
+			userIn <- UserInfo{nick, &clientSocket}
 			defer func() { userOut <- nick }()
-			writer.WriteString("Dołączyłeś\n")
+			clientSocket.Write([]byte("Dołączyłeś\n"))
 
 			for {
 				message, err := reader.ReadString('\n')
@@ -77,7 +75,6 @@ func main() {
 					return
 				}
 				messages <- Message{nick, message}
-				// fmt.Print(nick + ": " + message)
 			}
 		}()
 	}

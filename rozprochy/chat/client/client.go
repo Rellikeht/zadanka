@@ -23,16 +23,14 @@ func main() {
 	go func() {
 		reader := bufio.NewReader(conn)
 		for {
-			// message, _ := reader.ReadString('\n')
-			_, _ = reader.ReadString('\n')
-			fmt.Fprintln(os.Stderr, "msg")
-			// fmt.Print(message)
+			message, _ := reader.ReadString('\n')
+			fmt.Print(message)
 		}
 	}()
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		text, _ := reader.ReadString('\n')
-		fmt.Fprintf(conn, text+"\n")
+		fmt.Fprint(conn, text)
 	}
 }
