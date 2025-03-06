@@ -8,14 +8,14 @@ import (
 	"os"
 )
 
-type UserInfo = struct {
-	nick   string
-	socket *net.Conn
-}
-
 type Message = struct {
 	sender  string
-	content string
+	content *string
+}
+
+type UserInfo = struct {
+	nick     string
+	messages chan<- Message
 }
 
 func main() {
@@ -29,52 +29,66 @@ func main() {
 	userOut := make(chan string)
 	messages := make(chan Message)
 
-	// zarządzanie użytkownikami (i przesyłanie dalej wiadomości)
+	// wątek zarządzający użytkownikami i przesyłający dalej wiadomości
 	go func() {
-		users := make(map[string]*net.Conn)
+		users := make(map[string]chan<- Message)
 		for {
 			select {
 			case user := <-userIn:
 				fmt.Fprintln(os.Stderr, user.nick+" dołączył")
-				users[user.nick] = user.socket
+				users[user.nick] = user.messages
 			case nick := <-userOut:
 				fmt.Fprintln(os.Stderr, nick+" wyszedł")
 				delete(users, nick)
 			case message := <-messages:
-				for receiver, socket := range users {
+				for receiver, channel := range users {
 					if message.sender != receiver {
-						(*socket).Write([]byte(message.sender + ": " + message.content))
+						channel <- message
 					}
 				}
 			}
 		}
 	}()
 
+	// obsługa dołączających klientów
 	for {
 		clientSocket, err := serverSocket.Accept()
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		// Wątek do obsługi połączenia z nowo połączonym klientem
+		// Wątek do obsługi połączenia z nowym klientem
 		go func() {
 			reader := bufio.NewReader(clientSocket)
-
+			// Pierwsza wiadomość wysłana przez klienta to jego
+			// nick
 			nick, err := reader.ReadString('\n')
 			if err != nil {
 				log.Fatal(err)
 			}
 			nick = nick[:len(nick)-1]
-			userIn <- UserInfo{nick, &clientSocket}
+			messageChannel := make(chan Message)
+
+			userIn <- UserInfo{nick, messageChannel}
 			defer func() { userOut <- nick }()
 			clientSocket.Write([]byte("Dołączyłeś\n"))
 
+			// Dodatkowy wątek do przekazywania wiadomości do
+			// klienta
+			go func() {
+				for message := range messageChannel {
+					clientSocket.Write([]byte(message.sender + ": " + *message.content))
+				}
+			}()
+
+			// odczytywanie wiadomości wysłanych przez klienta
+			// i przesyłanie innym
 			for {
 				message, err := reader.ReadString('\n')
 				if err != nil {
 					return
 				}
-				messages <- Message{nick, message}
+				messages <- Message{nick, &message}
 			}
 		}()
 	}
