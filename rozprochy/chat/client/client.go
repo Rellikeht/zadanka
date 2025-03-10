@@ -8,30 +8,56 @@ import (
 	"os"
 )
 
+const ADDRESS = "localhost:9009"
+
+func HandleConnection(conn net.Conn, messages chan<- *string) {
+	reader := bufio.NewReader(conn)
+	for {
+		message, err := reader.ReadString('\n')
+		if err != nil {
+			log.Fatal(err)
+		}
+		messages <- &message
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "Podaj nick")
 		os.Exit(1)
 	}
 
-	conn, err := net.Dial("tcp", "localhost:9009")
+	tcpConn, err := net.Dial("tcp", ADDRESS)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// powiadamianie serwera o swoim nicku w pierwszej
-	// wiadomości
-	fmt.Fprintf(conn, os.Args[1]+"\n")
+	udpConn, err := net.Dial("udp4", ADDRESS)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// wątek obsługujący wypisywanie wiadomości od serwera
-	// na standardowe wyjście
+	// powiadamianie serwera o swoim nicku w pierwszej
+	// wiadomości i adresie udp w drugiej
+	fmt.Fprintf(tcpConn, os.Args[1]+"\n")
+	fmt.Fprintf(
+		tcpConn, udpConn.LocalAddr().String()+"\n",
+	)
+
+	tcpMessages := make(chan *string)
+	udpMessages := make(chan *string)
+
+	// wątki pomocnicze do odbierania wiadomości
+	go HandleConnection(tcpConn, tcpMessages)
+	go HandleConnection(udpConn, udpMessages)
+	// wątek wypisujący otrzymane wiadomości
 	go func() {
-		reader := bufio.NewReader(conn)
 		for {
-			message, err := reader.ReadString('\n')
-			if err != nil {
-				return
+			select {
+			case message := <-tcpMessages:
+				fmt.Print(*message)
+			case message := <-udpMessages:
+				fmt.Print(*message)
 			}
-			fmt.Print(message)
 		}
 	}()
 
@@ -42,6 +68,13 @@ func main() {
 		if err != nil {
 			return
 		}
-		fmt.Fprint(conn, text)
+		if len(text) > 2 {
+			switch text[:3] {
+			case "/u ":
+				fmt.Fprint(udpConn, text[3:])
+				continue
+			}
+		}
+		fmt.Fprint(tcpConn, text)
 	}
 }
