@@ -61,7 +61,7 @@ func UdpConnHandler(
 	conn *net.UDPConn,
 	messages chan<- Message,
 ) {
-	buffer := make([]byte, 4096)
+	buffer := make([]byte, BUFFER_SIZE)
 	for {
 		length, address, err := conn.ReadFromUDP(buffer)
 		if err != nil {
@@ -147,7 +147,10 @@ func ServeUser(
 		log.Fatal(err)
 	}
 	userIn <- UserInfo{nick, udpAddressRepr, messageChannel}
-	clientSocket.Write([]byte("Dołączyłeś do serwera\n"))
+	_, err = clientSocket.Write([]byte("Dołączyłeś do serwera\n"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Obsluga wyjścia klienta
 	defer func() { userOut <- nick }()

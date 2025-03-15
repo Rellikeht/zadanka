@@ -59,7 +59,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	// socket do odbierania wiadomości multicastowo
 	multicastRConn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
 	if err != nil {
 		log.Fatal(err)
@@ -68,7 +68,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	// socket do wysyłania wiadomości multicastowo
 	multicastWConn, err := net.DialUDP("udp", nil, multicastAddr)
 	if err != nil {
 		log.Fatal(err)
@@ -99,16 +99,24 @@ func main() {
 		multicastMessages,
 	)
 
-	// wątek wypisujący otrzymane wiadomości
+	// wątek obsługujący (wypisujący) otrzymane wiadomości
 	go func() {
+		writer := bufio.NewWriter(os.Stdout)
 		for {
 			select {
 			case message := <-tcpMessages:
-				fmt.Print(*message)
+				_, err = fmt.Fprint(writer, *message)
 			case message := <-udpMessages:
-				fmt.Print(*message)
+				_, err = fmt.Fprint(writer, *message)
 			case message := <-multicastMessages:
-				fmt.Print(*message)
+				_, err = fmt.Fprint(writer, *message)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			err := writer.Flush()
+			if err != nil {
+				log.Fatal(err)
 			}
 		}
 	}()
@@ -122,13 +130,13 @@ func main() {
 		}
 		if len(text) > 2 {
 			switch text[:3] {
-			case "/u ":
+			case "/U ":
 				_, err = fmt.Fprint(udpConn, text[3:])
 				if err != nil {
 					log.Fatal(err)
 				}
 				continue
-			case "/m ":
+			case "/M ":
 				_, err = fmt.Fprint(multicastWConn, nick+": "+text[3:])
 				if err != nil {
 					log.Fatal(err)
