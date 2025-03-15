@@ -8,15 +8,34 @@ import (
 	"os"
 )
 
-const ADDRESS = "localhost:9009"
+const (
+	ADDRESS           = "localhost:9009"
+	MULTICAST_ADDRESS = "224.0.0.0:9010"
+	BUFFER_SIZE       = 2 << 13
+)
 
 func HandleConnection(conn net.Conn, messages chan<- *string) {
-	reader := bufio.NewReader(conn)
+	reader := bufio.NewReaderSize(conn, BUFFER_SIZE)
 	for {
 		message, err := reader.ReadString('\n')
 		if err != nil {
 			log.Fatal(err)
 		}
+		messages <- &message
+	}
+}
+
+func HandleMulticastConnection(conn *net.UDPConn, addr net.Addr, messages chan<- *string) {
+	buffer := make([]byte, BUFFER_SIZE)
+	for {
+		n, sender, err := conn.ReadFromUDP(buffer)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if addr.String() == sender.String() {
+			continue
+		}
+		message := string(buffer[:n])
 		messages <- &message
 	}
 }
@@ -36,19 +55,50 @@ func main() {
 		log.Fatal(err)
 	}
 
+	multicastAddr, err := net.ResolveUDPAddr("udp", MULTICAST_ADDRESS)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	multicastRConn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = multicastRConn.SetReadBuffer(BUFFER_SIZE)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	multicastWConn, err := net.DialUDP("udp", nil, multicastAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = multicastWConn.SetWriteBuffer(BUFFER_SIZE)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// powiadamianie serwera o swoim nicku w pierwszej
 	// wiadomości i adresie udp w drugiej
-	fmt.Fprintf(tcpConn, os.Args[1]+"\n")
+	nick := os.Args[1]
+	fmt.Fprintf(tcpConn, nick+"\n")
 	fmt.Fprintf(
 		tcpConn, udpConn.LocalAddr().String()+"\n",
 	)
 
 	tcpMessages := make(chan *string)
 	udpMessages := make(chan *string)
+	multicastMessages := make(chan *string)
 
 	// wątki pomocnicze do odbierania wiadomości
 	go HandleConnection(tcpConn, tcpMessages)
 	go HandleConnection(udpConn, udpMessages)
+	go HandleMulticastConnection(
+		multicastRConn,
+		multicastWConn.LocalAddr(),
+		multicastMessages,
+	)
+
 	// wątek wypisujący otrzymane wiadomości
 	go func() {
 		for {
@@ -56,6 +106,8 @@ func main() {
 			case message := <-tcpMessages:
 				fmt.Print(*message)
 			case message := <-udpMessages:
+				fmt.Print(*message)
+			case message := <-multicastMessages:
 				fmt.Print(*message)
 			}
 		}
@@ -71,10 +123,22 @@ func main() {
 		if len(text) > 2 {
 			switch text[:3] {
 			case "/u ":
-				fmt.Fprint(udpConn, text[3:])
+				_, err = fmt.Fprint(udpConn, text[3:])
+				if err != nil {
+					log.Fatal(err)
+				}
+				continue
+			case "/m ":
+				_, err = fmt.Fprint(multicastWConn, nick+": "+text[3:])
+				if err != nil {
+					log.Fatal(err)
+				}
 				continue
 			}
 		}
-		fmt.Fprint(tcpConn, text)
+		_, err = fmt.Fprint(tcpConn, text)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }

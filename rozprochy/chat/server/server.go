@@ -15,6 +15,8 @@ type MsgType int
 const (
 	TCP MsgType = iota
 	UDP
+
+	BUFFER_SIZE = 2 << 13
 )
 
 type Message = struct {
@@ -79,24 +81,31 @@ func UserManagement(
 ) {
 	users := make(map[string]User)
 	addresses := make(map[string]string)
-
 	for {
 		select {
+
+		// dołączenie użytkownika
 		case user := <-userIn:
 			users[user.nick] = User{user.udpAddress, user.messages}
 			addresses[user.udpAddress] = user.nick
 			fmt.Fprintln(os.Stderr, user.nick+" dołączył")
+
+			// wyjście użytkownika
 		case nick := <-userOut:
 			user := users[nick]
 			delete(addresses, user.udpAddress)
 			delete(users, nick)
 			fmt.Fprintln(os.Stderr, nick+" wyszedł")
+
+			// wiadomość wysłana przez tcp
 		case message := <-tcpMessages:
 			for nick, user := range users {
 				if message.sender != nick {
 					user.messages <- message
 				}
 			}
+
+			// wiadomość wysłana przez udp
 		case message := <-udpMessages:
 			sender := addresses[message.sender]
 			message.sender = sender
@@ -150,12 +159,18 @@ func ServeUser(
 			content := []byte(message.sender + ": " + *message.content)
 			switch message.connType {
 			case TCP:
-				clientSocket.Write(content)
+				_, err := clientSocket.Write(content)
+				if err != nil {
+					log.Fatal(err)
+				}
 			case UDP:
-				serverUdpSocket.WriteToUDP(
+				_, err := serverUdpSocket.WriteToUDP(
 					content,
 					&udpAddress,
 				)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	}()
@@ -186,6 +201,14 @@ func main() {
 		"udp",
 		&net.UDPAddr{IP: IP, Port: PORT, Zone: ""},
 	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = serverUdpSocket.SetWriteBuffer(BUFFER_SIZE)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = serverUdpSocket.SetReadBuffer(BUFFER_SIZE)
 	if err != nil {
 		log.Fatal(err)
 	}
