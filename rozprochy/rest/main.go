@@ -7,6 +7,7 @@ import (
 	"net/http"
 )
 
+// fetches random joke
 func randomJoke() {
 	resp, err := http.Get("https://official-joke-api.appspot.com/jokes/random")
 	if err != nil {
@@ -18,6 +19,11 @@ func randomJoke() {
 
 func main() {
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.Dir("./")))
-	http.ListenAndServe(":9009", mux)
+
+	mux.Handle("/", http.FileServer(http.Dir("./static")))
+
+	err := http.ListenAndServe(":9009", mux)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
