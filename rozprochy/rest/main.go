@@ -9,16 +9,24 @@ import (
 	"strconv"
 )
 
-var (
-	comic_img string
-	resources = make(map[string]string)
+const (
+	COMIC_INSIDE = `
+<head>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="response">
+    <img id="comic" src="%s" alt="%s">
+    <div id="joke">%s</div>
+  <div>
+</body>
+`
+	JOKE_ADDR = "https://v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,religious,political,racist,sexist,explicit&contains=%s"
 )
 
-func handleResource(name string) func(writer http.ResponseWriter, request *http.Request) {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		writer.Write([]byte(resources[name]))
-	}
-}
+var (
+	resources = make(map[string]string)
+)
 
 func xkcd(number int) error {
 	address := fmt.Sprintf("https://xkcd.com/%d/info.0.json", number)
@@ -26,33 +34,37 @@ func xkcd(number int) error {
 	if err != nil {
 		return err
 	}
-
-	var (
-		content any
-		// bytes []byte
-	)
+	var content any
 	reader := bufio.NewReader(response.Body)
 	bytes, _ := reader.ReadString('\n')
-	// if err != nil {
-	//   log.Println(err)
-	//   return err
-	// }
 	err = json.Unmarshal([]byte(bytes), &content)
 	if err != nil {
 		return err
 	}
-
 	data := content.(map[string]any)
-	comic_img = data["img"].(string)
-	resources["comic-alt"] = data["alt"].(string)
-
+	resources["comic-img"] = data["img"].(string)
+	resources["comic-alt"] = data["safe_title"].(string)
+	resources["joke"] = "TODO"
 	return nil
 }
 
-func joke(contains string) error {
-	// https://v2.jokeapi.dev/joke/Any?
-	// blacklistFlags=nsfw,religious,political,racist,sexist&contains=%s
-	return nil
+func joke(contains string) (string, error) {
+	address := fmt.Sprintf(JOKE_ADDR, contains)
+	response, err := http.Get(address)
+	if err != nil {
+		return "", err
+	}
+	var content any
+	reader := bufio.NewReader(response.Body)
+	bytes, _ := reader.ReadString('\n')
+	fmt.Println(bytes)
+	err = json.Unmarshal([]byte(bytes), &content)
+	if err != nil {
+		return "", err
+	}
+	data := content.(map[string]any)
+	_ = data
+	return "FUNNY JOKE HERE", nil
 }
 
 func handleComic(writer http.ResponseWriter, request *http.Request) {
@@ -66,27 +78,25 @@ func handleComic(writer http.ResponseWriter, request *http.Request) {
 		log.Println(err)
 		return
 	}
-	err = joke(resources["joke"])
+	resources["joke"], err = joke(resources["joke"])
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	http.Redirect(writer, request, "/comic.html", http.StatusSeeOther)
+
+	response := fmt.Sprintf(
+		COMIC_INSIDE,
+		resources["comic-img"],
+		resources["comic-alt"],
+		resources["joke"],
+	)
+	writer.Write([]byte(response))
 }
 
 func main() {
 	mux := http.NewServeMux()
-
 	mux.Handle("/", http.FileServer(http.Dir("./static")))
 	mux.HandleFunc("/get-comic", handleComic)
-	mux.HandleFunc("/comic-img",
-		func(writer http.ResponseWriter, request *http.Request) {
-			http.Redirect(writer, request, comic_img, http.StatusSeeOther)
-		})
-	for _, name := range []string{"comic-alt", "joke"} {
-		mux.HandleFunc("/"+name, handleResource(name))
-	}
-
 	err := http.ListenAndServe(":9009", mux)
 	if err != nil {
 		log.Fatal(err)

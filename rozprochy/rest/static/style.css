@@ -1,7 +1,9 @@
 body {
   margin: 0;
   padding: 0;
-  font-size: 2em;
+  font-size: 1.5em;
+  width: 100vw;
+  height: 100vh;
 }
 
 input {
@@ -9,7 +11,11 @@ input {
   font-size: 1em;
 }
 
-form {
+iframe {
+  border: 0;
+}
+
+#form {
   width: 100vw;
   height: 100vh;
 }
@@ -17,7 +23,9 @@ form {
 #responses {
   width: 100vw;
   height: 100vh;
+  padding-top: 5vh;
   text-align: center;
+  align-items: center;
 }
 
 #inputs {
@@ -31,7 +39,20 @@ form {
   flex-basis: auto;
 }
 
-img {
-  margin: 5vh 0;
-  height: 70vh;
+#dummy {
+  width: 100vw;
+  height: 100vh;
+}
+
+#comic {
+  max-height: 80vh;
+  max-width: 100vw;
+  margin: 5vh auto 0 auto;
+  display: block;
+}
+
+#joke {
+  margin-top: 5vh;
+  height: 10vh;
+  text-align: center;
 }
