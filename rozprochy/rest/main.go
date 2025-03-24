@@ -3,9 +3,13 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 )
 
@@ -21,12 +25,19 @@ const (
   <div>
 </body>
 `
-	JOKE_ADDR = "https://v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,religious,political,racist,sexist,explicit&contains=%s"
+	JOKE_ADDR      = "https://v2.jokeapi.dev/joke/Any"
+	JOKE_BLACKLIST = "nsfw,religious,political,racist,sexist,explicit"
 )
 
 var (
 	resources = make(map[string]string)
 )
+
+func processJoke(title string) string {
+	reg, _ := regexp.Compile("[a-zA-Z-]+")
+	matches := reg.FindAllString(title, -1)
+	return matches[len(matches)-1]
+}
 
 func xkcd(number int) error {
 	address := fmt.Sprintf("https://xkcd.com/%d/info.0.json", number)
@@ -36,7 +47,10 @@ func xkcd(number int) error {
 	}
 	var content any
 	reader := bufio.NewReader(response.Body)
-	bytes, _ := reader.ReadString('\n')
+	bytes, err := io.ReadAll(reader)
+	if err != nil {
+		return err
+	}
 	err = json.Unmarshal([]byte(bytes), &content)
 	if err != nil {
 		return err
@@ -44,27 +58,42 @@ func xkcd(number int) error {
 	data := content.(map[string]any)
 	resources["comic-img"] = data["img"].(string)
 	resources["comic-alt"] = data["safe_title"].(string)
-	resources["joke"] = "TODO"
+	resources["joke"] = processJoke(data["title"].(string))
 	return nil
 }
 
 func joke(contains string) (string, error) {
-	address := fmt.Sprintf(JOKE_ADDR, contains)
-	response, err := http.Get(address)
+	endpoint, err := url.Parse(JOKE_ADDR)
+	if err != nil {
+		return "", err
+	}
+	params := url.Values{}
+	params.Set("blacklistFlags", JOKE_BLACKLIST)
+	params.Set("contains", contains)
+	endpoint.RawQuery = params.Encode()
+	response, err := http.Get(endpoint.String())
+	if err != nil {
+		return "", err
+	}
+	reader := bufio.NewReader(response.Body)
+	bytes, err := io.ReadAll(reader)
 	if err != nil {
 		return "", err
 	}
 	var content any
-	reader := bufio.NewReader(response.Body)
-	bytes, _ := reader.ReadString('\n')
-	fmt.Println(bytes)
-	err = json.Unmarshal([]byte(bytes), &content)
+	err = json.Unmarshal(bytes, &content)
 	if err != nil {
 		return "", err
 	}
 	data := content.(map[string]any)
-	_ = data
-	return "FUNNY JOKE HERE", nil
+	if data["error"].(bool) {
+		return "", errors.New("API error")
+	}
+	if data["type"].(string) == "single" {
+		return data["joke"].(string), nil
+	}
+	joke := fmt.Sprintf("%s\n\n%s", data["setup"].(string), data["delivery"].(string))
+	return joke, nil
 }
 
 func handleComic(writer http.ResponseWriter, request *http.Request) {
@@ -83,7 +112,6 @@ func handleComic(writer http.ResponseWriter, request *http.Request) {
 		log.Println(err)
 		return
 	}
-
 	response := fmt.Sprintf(
 		COMIC_INSIDE,
 		resources["comic-img"],
@@ -101,4 +129,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// fmt.Println(joke("joke"))
 }
