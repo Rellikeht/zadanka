@@ -1,13 +1,11 @@
+#include <chrono>
 #include <iostream>
 using namespace std;
+using namespace chrono;
 
 const char LOWERCASE = 32;
 
-int main() {
-  string input, tmp;
-  while (cin >> tmp) {
-    input += tmp + "\n";
-  }
+static inline void remove_duplicates(string &input) {
 
   size_t input_pos = 0, output_pos = 0;
   bool space = false, capital = false;
@@ -58,8 +56,31 @@ int main() {
 
   // TODO remove duplicates
 
-  cerr << input_pos << ' ' << output_pos << "\n";
   input.resize(output_pos);
-  cout << input << "\n";
+}
+
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(nullptr);
+  cout.tie(nullptr);
+
+  string input, tmp;
+  while (cin >> tmp) {
+    input += tmp + "\n";
+  }
+
+  const int RUNS = 10;
+  long long elapsed_time = 0;
+
+  for (int i = 1; i < RUNS; i++) {
+    auto start_time = high_resolution_clock::now();
+    remove_duplicates(input);
+    auto end_time = high_resolution_clock::now();
+    elapsed_time +=
+        duration_cast<microseconds>(end_time - start_time).count();
+  }
+
+  cout << "Time elapsed: " << elapsed_time << "μs\n";
+  // cout << input << "\n";
   return 0;
 }

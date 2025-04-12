@@ -1,32 +1,24 @@
+#include <chrono>
 #include <iostream>
 using namespace std;
+using namespace chrono;
 
 const char MIN_PRINT = 32;
 const char MAX_PRINT = 126;
 const char LOWERCASE = 32;
 
 static inline void copy_word(
-    string &buffer,
-    size_t &output_pos,
-    size_t &word_length,
-    size_t &space_between
+    string &buffer, long long &output_pos, long long &word_length
 ) {
   if (word_length == 0) {
     return;
   }
 
-  // Version with duplicates separated by whitespace
-  if (space_between == 0) {
-    word_length = 0;
-    return;
-  }
-
-  const long long word_start =
-      output_pos - space_between - 2 * word_length;
+  const long long word_start = output_pos - 1 - 2 * word_length;
   bool equal = true;
 
   if (word_start >= 0) {
-    size_t i = word_start, j = output_pos - word_length;
+    long long i = word_start, j = output_pos - word_length;
     for (; i < word_start + word_length; i++) {
       if (buffer[i] != buffer[j]) {
         equal = false;
@@ -35,21 +27,14 @@ static inline void copy_word(
       j++;
     }
     if (equal) {
-      output_pos -= word_length + space_between;
+      output_pos -= word_length + 1;
     }
   }
-  space_between = 0;
   word_length = 0;
 }
 
-int main() {
-  string input, tmp;
-  while (cin >> tmp) {
-    input += tmp + "\n";
-  }
-
-  size_t input_pos = 0, output_pos = 0, word_length = 0,
-         space_between = 0;
+static inline void remove_duplicates(string &input) {
+  long long input_pos = 0, output_pos = 0, word_length = 0;
   bool space = false;
 
   while (input_pos < input.size()) {
@@ -58,12 +43,11 @@ int main() {
     case '\t':
     case '\n':
     case '\r':
-      copy_word(input, output_pos, word_length, space_between);
+      copy_word(input, output_pos, word_length);
       if (!space) {
         input[output_pos] = ' ';
         space = true;
         output_pos++;
-        space_between++;
       }
       input_pos++;
       continue;
@@ -71,13 +55,10 @@ int main() {
     case ',':
     case ':':
     case ';':
-      copy_word(input, output_pos, word_length, space_between);
       input[output_pos] = ',';
       input_pos++;
       output_pos++;
-      // Version with duplicates separated by whitespace or
-      // punctuation
-      // space_between++;
+      word_length++;
       space = false;
       continue;
     }
@@ -99,8 +80,31 @@ int main() {
     output_pos++;
   }
 
-  cerr << input_pos << ' ' << output_pos << "\n";
   input.resize(output_pos);
-  cout << input << "\n";
+}
+
+int main() {
+  ios_base::sync_with_stdio(false);
+  cin.tie(nullptr);
+  cout.tie(nullptr);
+
+  string input, tmp;
+  while (cin >> tmp) {
+    input += tmp + "\n";
+  }
+
+  const int RUNS = 10;
+  long long elapsed_time = 0;
+
+  for (int i = 1; i < RUNS; i++) {
+    auto start_time = high_resolution_clock::now();
+    remove_duplicates(input);
+    auto end_time = high_resolution_clock::now();
+    elapsed_time +=
+        duration_cast<microseconds>(end_time - start_time).count();
+  }
+
+  cout << "Time elapsed: " << elapsed_time << "μs\n";
+  // cout << input << "\n";
   return 0;
 }
