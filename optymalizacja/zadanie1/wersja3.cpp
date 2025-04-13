@@ -36,7 +36,7 @@ static inline void remove_duplicates(string &input) {
   long long input_pos = 0, output_pos = 0, word_length = 0;
   bool space = false;
 
-  while (input_pos < input.size()) {
+  while (input_pos < (long long)input.size()) {
     switch (input[input_pos]) {
     case ' ':
     case '\t':
@@ -107,6 +107,6 @@ int main() {
   elapsed_time /= RUNS;
 
   cout << "Time elapsed: " << elapsed_time << "μs\n";
-  cout << work_input << "\n";
+  /* cout << work_input << "\n"; */
   return 0;
 }
