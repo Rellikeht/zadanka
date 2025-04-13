@@ -13,12 +13,11 @@ static inline void copy_word(
   if (word_length == 0) {
     return;
   }
-
-  const long long word_start = output_pos - 1 - 2 * word_length;
+  const long long word_start = output_pos - 2 * word_length - 2;
   bool equal = true;
 
   if (word_start >= 0) {
-    long long i = word_start, j = output_pos - word_length;
+    long long i = word_start, j = output_pos - word_length - 1;
     for (; i < word_start + word_length; i++) {
       if (buffer[i] != buffer[j]) {
         equal = false;
@@ -51,6 +50,7 @@ static inline void remove_duplicates(string &input) {
       }
       input_pos++;
       continue;
+
     case '.':
     case ',':
     case ':':
@@ -70,12 +70,10 @@ static inline void remove_duplicates(string &input) {
     }
     space = false;
     word_length++;
-
     input[output_pos] = input[input_pos];
     if (input[input_pos] >= 'A' && input[input_pos] <= 'Z') {
       input[output_pos] |= LOWERCASE;
     }
-
     input_pos++;
     output_pos++;
   }
@@ -89,22 +87,26 @@ int main() {
   cout.tie(nullptr);
 
   string input, tmp;
-  while (cin >> tmp) {
+  while (getline(cin, tmp)) {
     input += tmp + "\n";
   }
 
   const int RUNS = 10;
   long long elapsed_time = 0;
+  string work_input = input;
+  remove_duplicates(work_input);
 
-  for (int i = 1; i < RUNS; i++) {
+  for (int i = 0; i < RUNS; i++) {
+    work_input = input;
     auto start_time = high_resolution_clock::now();
-    remove_duplicates(input);
+    remove_duplicates(work_input);
     auto end_time = high_resolution_clock::now();
     elapsed_time +=
         duration_cast<microseconds>(end_time - start_time).count();
   }
+  elapsed_time /= RUNS;
 
   cout << "Time elapsed: " << elapsed_time << "μs\n";
-  // cout << input << "\n";
+  cout << work_input << "\n";
   return 0;
 }
