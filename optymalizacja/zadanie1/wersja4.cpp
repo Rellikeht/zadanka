@@ -1,10 +1,10 @@
 #include <chrono>
+#include <cstring>
 #include <iostream>
 using namespace std;
 using namespace chrono;
 
 const char LOWERCASE = 32;
-// TODO bare metal
 
 static inline void change_chars(string &input) {
   auto input_it = input.begin(), output_it = input.begin();
@@ -72,7 +72,6 @@ static inline void deduplicate_words(string &input) {
   const auto begin = input.begin(), end = input.end();
   long long word_length = 0;
   auto cur_word = begin, prev_word = begin;
-  bool duplicate = false;
 
   while (input_it != end) {
     if (*input_it == ' ') {
@@ -87,35 +86,20 @@ static inline void deduplicate_words(string &input) {
     if (*input_it == ' ') {
       prev_word = output_it - word_length - 1;
       cur_word = input_it - word_length - 1;
-
       if (cur_word < begin) {
         cur_word++;
-        while (cur_word <= input_it) {
-          output_it++;
-          *output_it = *cur_word;
-          cur_word++;
-        }
+        auto amount = input_it - cur_word;
+        memcpy(output_it.base(), cur_word.base(), amount);
+        output_it += amount;
       } else {
-
-        duplicate = true;
-        while (cur_word < input_it - 1) {
-          if (*prev_word != *cur_word) {
-            duplicate = false;
-            break;
-          }
-          prev_word++;
-          cur_word++;
-        }
-        if (!duplicate) {
-          for (cur_word = input_it - word_length;
-               cur_word <= input_it;
-               cur_word++) {
-            output_it++;
-            *output_it = *cur_word;
-          }
+        if (memcmp(
+                cur_word.base(), prev_word.base(), word_length
+            ) != 0) {
+          word_length++;
+          memcpy(output_it.base(), cur_word.base(), word_length);
+          output_it += word_length;
         }
       }
-
       word_length = 0;
     } else {
       word_length++;
@@ -123,7 +107,7 @@ static inline void deduplicate_words(string &input) {
     input_it++;
   }
 
-  input.resize(output_it - input.begin());
+  input.resize(output_it - begin);
 }
 
 static inline void transform(string &input) {
