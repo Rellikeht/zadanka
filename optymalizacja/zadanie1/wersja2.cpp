@@ -5,7 +5,7 @@ using namespace chrono;
 
 const char LOWERCASE = 32;
 
-static inline void transform(string &input) {
+static inline void change_chars(string &input) {
   long long input_pos = 0, output_pos = 0;
   bool space = false, capital = false;
 
@@ -44,7 +44,7 @@ static inline void transform(string &input) {
     case '<' ... '>':
     case 'a' ... 'z':
     case '[' ... '`':
-    case '{' ... '~':
+    case '\{' ... '~':
       input[output_pos] = input[input_pos];
       space = false;
       if (capital) {
@@ -54,19 +54,20 @@ static inline void transform(string &input) {
       output_pos++;
       break;
     default:
-      /* space = false; */
       break;
     }
     input_pos++;
   }
 
   input.resize(output_pos);
+}
+
+static inline void deduplicate_words(string &input) {
   if (input.size() < 2) {
     return;
   }
 
-  input_pos = 0;
-  output_pos = 0;
+  long long input_pos = 0, output_pos = 0;
   long long word_length = 0, prev_word = 0, cur_word = 0;
   bool duplicate = false;
 
@@ -120,6 +121,11 @@ static inline void transform(string &input) {
   }
 
   input.resize(output_pos);
+}
+
+static inline void transform(string &input) {
+  change_chars(input);
+  deduplicate_words(input);
 }
 
 int main() {

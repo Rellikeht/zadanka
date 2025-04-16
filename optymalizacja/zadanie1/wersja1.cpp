@@ -5,7 +5,7 @@ using namespace chrono;
 
 const char LOWERCASE = 32;
 
-static inline string transform(string input) {
+static inline string change_chars(string input) {
   long long input_pos = 0, output_pos = 0;
   bool space = false, capital = false;
   string result;
@@ -62,18 +62,22 @@ static inline string transform(string input) {
   }
 
   result.resize(output_pos);
+  return result;
+}
+
+static inline string deduplicate_words(string input) {
+  string result = input;
+
   if (result.size() < 2) {
     return result;
   }
-  string temp = result;
 
-  input_pos = 0;
-  output_pos = 0;
+  long long input_pos = 0, output_pos = 0;
   long long word_length = 0, prev_word = 0, cur_word = 0;
   bool duplicate = false;
 
-  while (input_pos < (long long)temp.size()) {
-    if (temp[input_pos] == ' ') {
+  while (input_pos < (long long)input.size()) {
+    if (input[input_pos] == ' ') {
       input_pos++;
       break;
     }
@@ -81,22 +85,22 @@ static inline string transform(string input) {
     output_pos++;
   }
 
-  while (input_pos < (long long)temp.size()) {
-    if (temp[input_pos] == ' ') {
+  while (input_pos < (long long)input.size()) {
+    if (input[input_pos] == ' ') {
       prev_word = output_pos - word_length - 1;
       cur_word = input_pos - word_length - 1;
 
       if (prev_word < 0) {
         while (cur_word < input_pos) {
           output_pos++;
-          result[output_pos] = temp[cur_word];
+          result[output_pos] = input[cur_word];
           cur_word++;
         }
       } else {
 
         duplicate = true;
         while (cur_word < input_pos - 1) {
-          if (result[prev_word] != temp[cur_word]) {
+          if (result[prev_word] != input[cur_word]) {
             duplicate = false;
             break;
           }
@@ -108,7 +112,7 @@ static inline string transform(string input) {
                cur_word <= input_pos;
                cur_word++) {
             output_pos++;
-            result[output_pos] = temp[cur_word];
+            result[output_pos] = input[cur_word];
           }
         }
       }
@@ -122,6 +126,10 @@ static inline string transform(string input) {
 
   result.resize(output_pos);
   return result;
+}
+
+static inline string transform(string input) {
+  return deduplicate_words(change_chars(input));
 }
 
 int main() {

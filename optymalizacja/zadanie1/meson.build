@@ -1,9 +1,9 @@
 project('zadanie', 'cpp')
 
-foreach file : ['wersja1', 'wersja2', 'wersja3']
+foreach file : ['wersja1', 'wersja2', 'wersja3', 'wersja4']
   src = file+'.cpp'
   executable(file, src, cpp_args: [])
-  executable(file+'prof', src, cpp_args: ['-pg'])
+  executable(file+'prof', src, cpp_args: ['-pg'], link_args: ['-pg'])
   executable(file+'O2', src, cpp_args: ['-O2'])
 endforeach
 
