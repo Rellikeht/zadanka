@@ -5,10 +5,12 @@ using namespace chrono;
 
 const char LOWERCASE = 32;
 
-// TODO more bulk comparisons?
-static inline void remove_duplicates(string &input) {
+// TODO do all of that badly
+static inline string transform(string input) {
   long long input_pos = 0, output_pos = 0;
   bool space = false, capital = false;
+  string result;
+  result.resize(input.size());
 
   while (input_pos < (long long)input.size()) {
     switch (input[input_pos]) {
@@ -17,7 +19,7 @@ static inline void remove_duplicates(string &input) {
     case '\n':
     case '\r':
       if (!space) {
-        input[output_pos] = ' ';
+        result[output_pos] = ' ';
         space = true;
         output_pos++;
       }
@@ -29,7 +31,7 @@ static inline void remove_duplicates(string &input) {
     case ';':
     case '!':
     case '?':
-      input[output_pos] = ',';
+      result[output_pos] = ',';
       output_pos++;
       space = false;
       break;
@@ -46,33 +48,33 @@ static inline void remove_duplicates(string &input) {
     case 'a' ... 'z':
     case '[' ... '`':
     case '{' ... '~':
-      input[output_pos] = input[input_pos];
+      result[output_pos] = input[input_pos];
       space = false;
       if (capital) {
-        input[output_pos] |= LOWERCASE;
+        result[output_pos] |= LOWERCASE;
         capital = false;
       }
       output_pos++;
       break;
     default:
-      /* space = false; */
       break;
     }
     input_pos++;
   }
 
-  input.resize(output_pos);
-  if (input.size() < 2) {
-    return;
+  result.resize(output_pos);
+  if (result.size() < 2) {
+    return result;
   }
+  string temp = result;
 
   input_pos = 0;
   output_pos = 0;
   long long word_length = 0, prev_word = 0, cur_word = 0;
   bool duplicate = false;
 
-  while (input_pos < (long long)input.size()) {
-    if (input[input_pos] == ' ') {
+  while (input_pos < (long long)temp.size()) {
+    if (temp[input_pos] == ' ') {
       input_pos++;
       break;
     }
@@ -80,26 +82,22 @@ static inline void remove_duplicates(string &input) {
     output_pos++;
   }
 
-  while (input_pos < (long long)input.size()) {
-    if (input[input_pos] == ' ') {
+  while (input_pos < (long long)temp.size()) {
+    if (temp[input_pos] == ' ') {
       prev_word = output_pos - word_length - 1;
       cur_word = input_pos - word_length - 1;
-      /* cerr << cur_word << ' ' << word_length << ' '; */
-      /* cerr << output_pos << ' ' << input_pos << '\n'; */
 
       if (prev_word < 0) {
-        cur_word++;
-        // TODO better copying
-        while (cur_word <= input_pos) {
+        while (cur_word < input_pos) {
           output_pos++;
-          input[output_pos] = input[cur_word];
+          result[output_pos] = temp[cur_word];
           cur_word++;
         }
       } else {
 
         duplicate = true;
         while (cur_word < input_pos - 1) {
-          if (input[prev_word] != input[cur_word]) {
+          if (result[prev_word] != temp[cur_word]) {
             duplicate = false;
             break;
           }
@@ -107,12 +105,11 @@ static inline void remove_duplicates(string &input) {
           cur_word++;
         }
         if (!duplicate) {
-          // TODO better copying
           for (cur_word = input_pos - word_length;
                cur_word <= input_pos;
                cur_word++) {
             output_pos++;
-            input[output_pos] = input[cur_word];
+            result[output_pos] = temp[cur_word];
           }
         }
       }
@@ -124,7 +121,8 @@ static inline void remove_duplicates(string &input) {
     input_pos++;
   }
 
-  input.resize(output_pos);
+  result.resize(output_pos);
+  return result;
 }
 
 int main() {
@@ -139,13 +137,11 @@ int main() {
 
   const int RUNS = 10;
   long long elapsed_time = 0;
-  string work_input = input;
-  remove_duplicates(work_input);
+  string output = transform(input);
 
   for (int i = 0; i < RUNS; i++) {
-    work_input = input;
     auto start_time = high_resolution_clock::now();
-    remove_duplicates(work_input);
+    output = transform(input);
     auto end_time = high_resolution_clock::now();
     elapsed_time +=
         duration_cast<microseconds>(end_time - start_time).count();
@@ -153,6 +149,6 @@ int main() {
   elapsed_time /= RUNS;
 
   cout << "Time elapsed: " << elapsed_time << "μs\n";
-  cout << work_input << "\n";
+  cout << output << "\n";
   return 0;
 }
