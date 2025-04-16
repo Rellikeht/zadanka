@@ -3,82 +3,131 @@
 using namespace std;
 using namespace chrono;
 
-const char MIN_PRINT = 32;
-const char MAX_PRINT = 126;
 const char LOWERCASE = 32;
 
-static inline void copy_word(
-    string &buffer, long long &output_pos, long long &word_length
-) {
-  if (word_length == 0) {
-    return;
-  }
-  const long long word_start = output_pos - 2 * word_length - 2;
-  bool equal = true;
+static inline void change_chars(string &input) {
+  auto input_it = input.begin(), output_it = input.begin();
+  const auto end = input.end();
+  bool space = false, capital = false;
 
-  if (word_start >= 0) {
-    long long i = word_start, j = output_pos - word_length - 1;
-    for (; i < word_start + word_length; i++) {
-      if (buffer[i] != buffer[j]) {
-        equal = false;
-        break;
-      }
-      j++;
-    }
-    if (equal) {
-      output_pos -= word_length + 1;
-    }
-  }
-  word_length = 0;
-}
-
-static inline void transform(string &input) {
-  long long input_pos = 0, output_pos = 0, word_length = 0;
-  bool space = false;
-
-  while (input_pos < (long long)input.size()) {
-    switch (input[input_pos]) {
+  while (input_it != end) {
+    switch (*input_it) {
     case ' ':
     case '\t':
     case '\n':
     case '\r':
-      copy_word(input, output_pos, word_length);
       if (!space) {
-        input[output_pos] = ' ';
+        *output_it = ' ';
         space = true;
-        output_pos++;
+        output_it++;
       }
-      input_pos++;
-      continue;
+      break;
 
     case '.':
     case ',':
     case ':':
     case ';':
-      input[output_pos] = ',';
-      input_pos++;
-      output_pos++;
-      word_length++;
+    case '!':
+    case '?':
+      *output_it = ',';
+      output_it++;
       space = false;
-      continue;
-    }
+      break;
 
-    if (input[input_pos] < MIN_PRINT ||
-        input[input_pos] > MAX_PRINT) {
-      input_pos++;
-      continue;
+    case 'A' ... 'Z':
+      capital = true;
+      // fallthrough
+    case '"' ... '+':
+    case '-':
+    case '/':
+    case '@':
+    case '0' ... '9':
+    case '<' ... '>':
+    case 'a' ... 'z':
+    case '[' ... '`':
+    case '\{' ... '~':
+      *output_it = *input_it;
+      space = false;
+      if (capital) {
+        *output_it |= LOWERCASE;
+        capital = false;
+      }
+      output_it++;
+      break;
+    default:
+      break;
     }
-    space = false;
-    word_length++;
-    input[output_pos] = input[input_pos];
-    if (input[input_pos] >= 'A' && input[input_pos] <= 'Z') {
-      input[output_pos] |= LOWERCASE;
-    }
-    input_pos++;
-    output_pos++;
+    input_it++;
   }
 
-  input.resize(output_pos);
+  input.resize(output_it - input.begin());
+}
+
+static inline void deduplicate_words(string &input) {
+  if (input.size() < 2) {
+    return;
+  }
+  auto input_it = input.begin(), output_it = input.begin();
+  const auto begin = input.begin(), end = input.end();
+  long long word_length = 0;
+  auto cur_word = begin, prev_word = begin;
+  bool duplicate = false;
+
+  while (input_it != end) {
+    if (*input_it == ' ') {
+      input_it++;
+      break;
+    }
+    input_it++;
+    output_it++;
+  }
+
+  while (input_it != end) {
+    if (*input_it == ' ') {
+      prev_word = output_it - word_length - 1;
+      cur_word = input_it - word_length - 1;
+
+      if (cur_word < begin) {
+        cur_word++;
+        while (cur_word <= input_it) {
+          output_it++;
+          *output_it = *cur_word;
+          cur_word++;
+        }
+      } else {
+
+        duplicate = true;
+        while (cur_word < input_it - 1) {
+          if (*prev_word != *cur_word) {
+            duplicate = false;
+            break;
+          }
+          prev_word++;
+          cur_word++;
+        }
+        if (!duplicate) {
+          for (cur_word = input_it - word_length;
+               cur_word <= input_it;
+               cur_word++) {
+            output_it++;
+            *output_it = *cur_word;
+          }
+        }
+      }
+
+      word_length = 0;
+    } else {
+      word_length++;
+    }
+    input_it++;
+  }
+
+  input.resize(output_it - input.begin());
+}
+
+static inline void transform(string &input) {
+  change_chars(input);
+  deduplicate_words(input);
 }
 
 int main() {

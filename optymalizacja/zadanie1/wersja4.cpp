@@ -4,22 +4,23 @@ using namespace std;
 using namespace chrono;
 
 const char LOWERCASE = 32;
+// TODO bare metal
 
-// TODO more bulk comparisons?
-static inline void transform(string &input) {
-  long long input_pos = 0, output_pos = 0;
+static inline void change_chars(string &input) {
+  auto input_it = input.begin(), output_it = input.begin();
+  const auto end = input.end();
   bool space = false, capital = false;
 
-  while (input_pos < (long long)input.size()) {
-    switch (input[input_pos]) {
+  while (input_it != end) {
+    switch (*input_it) {
     case ' ':
     case '\t':
     case '\n':
     case '\r':
       if (!space) {
-        input[output_pos] = ' ';
+        *output_it = ' ';
         space = true;
-        output_pos++;
+        output_it++;
       }
       break;
 
@@ -29,8 +30,8 @@ static inline void transform(string &input) {
     case ';':
     case '!':
     case '?':
-      input[output_pos] = ',';
-      output_pos++;
+      *output_it = ',';
+      output_it++;
       space = false;
       break;
 
@@ -45,61 +46,60 @@ static inline void transform(string &input) {
     case '<' ... '>':
     case 'a' ... 'z':
     case '[' ... '`':
-    case '{' ... '~':
-      input[output_pos] = input[input_pos];
+    case '\{' ... '~':
+      *output_it = *input_it;
       space = false;
       if (capital) {
-        input[output_pos] |= LOWERCASE;
+        *output_it |= LOWERCASE;
         capital = false;
       }
-      output_pos++;
+      output_it++;
       break;
     default:
-      /* space = false; */
       break;
     }
-    input_pos++;
+    input_it++;
   }
 
-  input.resize(output_pos);
+  input.resize(output_it - input.begin());
+}
+
+static inline void deduplicate_words(string &input) {
   if (input.size() < 2) {
     return;
   }
-
-  input_pos = 0;
-  output_pos = 0;
-  long long word_length = 0, prev_word = 0, cur_word = 0;
+  auto input_it = input.begin(), output_it = input.begin();
+  const auto begin = input.begin(), end = input.end();
+  long long word_length = 0;
+  auto cur_word = begin, prev_word = begin;
   bool duplicate = false;
 
-  while (input_pos < (long long)input.size()) {
-    if (input[input_pos] == ' ') {
-      input_pos++;
+  while (input_it != end) {
+    if (*input_it == ' ') {
+      input_it++;
       break;
     }
-    input_pos++;
-    output_pos++;
+    input_it++;
+    output_it++;
   }
 
-  while (input_pos < (long long)input.size()) {
-    if (input[input_pos] == ' ') {
-      prev_word = output_pos - word_length - 1;
-      cur_word = input_pos - word_length - 1;
-      /* cerr << cur_word << ' ' << word_length << ' '; */
-      /* cerr << output_pos << ' ' << input_pos << '\n'; */
+  while (input_it != end) {
+    if (*input_it == ' ') {
+      prev_word = output_it - word_length - 1;
+      cur_word = input_it - word_length - 1;
 
-      if (prev_word < 0) {
+      if (cur_word < begin) {
         cur_word++;
-        // TODO better copying
-        while (cur_word <= input_pos) {
-          output_pos++;
-          input[output_pos] = input[cur_word];
+        while (cur_word <= input_it) {
+          output_it++;
+          *output_it = *cur_word;
           cur_word++;
         }
       } else {
 
         duplicate = true;
-        while (cur_word < input_pos - 1) {
-          if (input[prev_word] != input[cur_word]) {
+        while (cur_word < input_it - 1) {
+          if (*prev_word != *cur_word) {
             duplicate = false;
             break;
           }
@@ -107,12 +107,11 @@ static inline void transform(string &input) {
           cur_word++;
         }
         if (!duplicate) {
-          // TODO better copying
-          for (cur_word = input_pos - word_length;
-               cur_word <= input_pos;
+          for (cur_word = input_it - word_length;
+               cur_word <= input_it;
                cur_word++) {
-            output_pos++;
-            input[output_pos] = input[cur_word];
+            output_it++;
+            *output_it = *cur_word;
           }
         }
       }
@@ -121,10 +120,15 @@ static inline void transform(string &input) {
     } else {
       word_length++;
     }
-    input_pos++;
+    input_it++;
   }
 
-  input.resize(output_pos);
+  input.resize(output_it - input.begin());
+}
+
+static inline void transform(string &input) {
+  change_chars(input);
+  deduplicate_words(input);
 }
 
 int main() {
@@ -153,6 +157,6 @@ int main() {
   elapsed_time /= RUNS;
 
   cout << "Time elapsed: " << elapsed_time << "μs\n";
-  cout << work_input << "\n";
+  /* cout << work_input << "\n"; */
   return 0;
 }
