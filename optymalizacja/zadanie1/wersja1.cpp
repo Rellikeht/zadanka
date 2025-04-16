@@ -5,7 +5,6 @@ using namespace chrono;
 
 const char LOWERCASE = 32;
 
-// TODO do all of that badly
 static inline string transform(string input) {
   long long input_pos = 0, output_pos = 0;
   bool space = false, capital = false;
@@ -149,6 +148,6 @@ int main() {
   elapsed_time /= RUNS;
 
   cout << "Time elapsed: " << elapsed_time << "μs\n";
-  cout << output << "\n";
+  /* cout << output << "\n"; */
   return 0;
 }

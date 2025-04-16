@@ -5,7 +5,6 @@ using namespace chrono;
 
 const char LOWERCASE = 32;
 
-// TODO more bulk comparisons?
 static inline void transform(string &input) {
   long long input_pos = 0, output_pos = 0;
   bool space = false, capital = false;
@@ -84,12 +83,9 @@ static inline void transform(string &input) {
     if (input[input_pos] == ' ') {
       prev_word = output_pos - word_length - 1;
       cur_word = input_pos - word_length - 1;
-      /* cerr << cur_word << ' ' << word_length << ' '; */
-      /* cerr << output_pos << ' ' << input_pos << '\n'; */
 
       if (prev_word < 0) {
         cur_word++;
-        // TODO better copying
         while (cur_word <= input_pos) {
           output_pos++;
           input[output_pos] = input[cur_word];
@@ -107,7 +103,6 @@ static inline void transform(string &input) {
           cur_word++;
         }
         if (!duplicate) {
-          // TODO better copying
           for (cur_word = input_pos - word_length;
                cur_word <= input_pos;
                cur_word++) {
@@ -153,6 +148,6 @@ int main() {
   elapsed_time /= RUNS;
 
   cout << "Time elapsed: " << elapsed_time << "μs\n";
-  cout << work_input << "\n";
+  /* cout << work_input << "\n"; */
   return 0;
 }

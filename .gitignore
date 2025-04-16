@@ -69,5 +69,7 @@ Manifest.toml
 /tw/**/*.dot
 !/tw/**/tests/*
 
-bck
+bck/
+*.bck
+tmp/
 *.tmp
