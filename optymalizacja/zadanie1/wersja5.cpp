@@ -46,7 +46,7 @@ static inline void change_chars(string &input) {
     case '<' ... '>':
     case 'a' ... 'z':
     case '[' ... '`':
-    case '\{' ... '~':
+    case '{' ... '~': // }
       *output_it = *input_it;
       space = false;
       if (capital) {
@@ -139,6 +139,6 @@ int main() {
   elapsed_time /= RUNS;
 
   cout << "Time elapsed: " << elapsed_time << "μs\n";
-  /* cout << work_input << "\n"; */
+  cout << work_input << "\n";
   return 0;
 }
