@@ -1,0 +1,44 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.zeroc:ice:3.7.10'
+}
+
+application {
+    mainClass = 'Server'
+}
+
+tasks.run.configure {
+    standardInput = System.in
+}
+
+// This task will call the external slice2java command
+task generateIceCode(type: Exec) {
+    group = 'ice'
+    description = 'Generates Java code from Slice definitions'
+    
+    // Use the system's slice2java command
+    executable = 'slice2java'
+    
+    args = [
+        '-I', "$projectDir/../slice",
+        '--output-dir', "$projectDir/src/main/java",
+        "$projectDir/../slice/SimpleService.ice"
+    ]
+    
+    // Make this task optional in case slice2java is not available
+    ignoreExitValue = true
+    
+    doFirst {
+        println "Generating Ice code from Slice definitions..."
+    }
+}
+
+compileJava.dependsOn generateIceCode
