@@ -1,0 +1,167 @@
+// head and helpers {{{
+
+syntax = "proto2";
+
+package common;
+option go_package = "github.com/Rellikeht/zadanieA/server/common";
+
+message Empty {}
+message SimpleResponse { required uint64 status = 1; }
+
+//  }}}
+
+// Meters {{{
+
+enum MeterType {
+  THERMOMETER = 0;
+  CO_METER = 1;
+  BAROMETER = 2;
+}
+
+enum CO_danger {
+  SAFE = 0;
+  WARNING = 1;
+  DANGEROUS = 2;
+}
+
+message Temperature { required double value = 1; }
+message CO_level {
+  required double level = 1;
+  optional CO_danger danger = 2;
+}
+message Pressure { required double pressure = 1; }
+
+message Meter {
+  required MeterType type = 1;
+  //
+}
+
+message MeterState {
+  required MeterType meter_type = 1;
+  oneof value {
+    Temperature temperature = 2;
+    CO_level co_level = 3;
+    Pressure pressure = 4;
+  }
+}
+
+//  }}}
+
+// Heaters {{{
+
+message Heater {
+  required double max_temp = 1;
+  required double min_temp = 2;
+  required uint64 power = 3;
+}
+
+message HeaterState {
+  required double current_temp = 1;
+  required double set_temp = 2;
+  required uint64 current_power = 3;
+}
+
+//  }}}
+
+// Security devices {{{
+
+message SecurityDevice {
+  required uint64 width = 1;
+  required uint64 height = 2;
+}
+
+message SecurityState {
+  required bool movement_detected = 1;
+  required bool tampered = 2;
+  required bool night_vision = 3;
+  //
+}
+
+//  }}}
+
+// Devices {{{
+
+enum DeviceType {
+  METER = 0;
+  HEATER = 1;
+  SECURITY = 2;
+}
+
+message Id { required uint64 id = 1; }
+
+message DeviceInfo {
+  required DeviceType type = 1;
+  required Id id = 2;
+  required string name = 3;
+  oneof type_info {
+    Meter meter = 4;
+    Heater heater = 5;
+    SecurityDevice security = 6;
+  }
+}
+
+message DevicesInfo { repeated DeviceInfo devices = 1; }
+
+enum WorkingState {
+  ON = 0;
+  OFF = 1;
+  STARTING = 2;
+  STOPPING = 3;
+}
+
+message DeviceState {
+  required WorkingState working_state = 1;
+  oneof type_state {
+    MeterState meter_state = 2;
+    HeaterState heater_state = 3;
+    SecurityState security_state = 4;
+  }
+  optional bool is_ok = 5;
+}
+
+// message DevicesState { repeated DeviceState devices = 1; }
+
+//  }}}
+
+// Server {{{
+
+message DevInfoResponse {
+  required uint64 status = 1;
+  required DevicesInfo devices = 2;
+}
+
+message DevStateResponse {
+  required uint64 status = 1;
+  required DeviceState state = 2;
+}
+
+service DeviceRegistry {
+  rpc GetDevices(Empty) returns (DevInfoResponse) {}
+  rpc GetDeviceState(Id) returns (DevStateResponse) {}
+  rpc ToggleDevice(Id) returns (SimpleResponse) {}
+}
+
+//  }}}
+
+// Controllers {{{
+
+message TempInfo {
+  required Id id = 1;
+  required double new_temp = 2;
+}
+
+message PowerInfo {
+  required Id id = 1;
+  required uint64 new_power = 2;
+}
+
+service HeaterController {
+  rpc SetTemp(TempInfo) returns (SimpleResponse) {}
+  rpc SetPower(PowerInfo) returns (SimpleResponse) {}
+}
+
+service SecurityController {
+  rpc ToggleNightVision(Id) returns (SimpleResponse) {}
+}
+
+//  }}}
