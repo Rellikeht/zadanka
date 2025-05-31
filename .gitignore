@@ -74,5 +74,9 @@ bck/
 tmp/
 *.tmp
 
+!/tw/**/bck/
+!/sysopy/**/bck
+!/kompilatory/**/bck
+
 flake.lock
 mix.lock
