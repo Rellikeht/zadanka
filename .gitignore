@@ -73,3 +73,6 @@ bck/
 *.bck
 tmp/
 *.tmp
+
+flake.lock
+mix.lock
