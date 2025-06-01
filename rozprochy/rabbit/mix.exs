@@ -15,8 +15,7 @@ defmodule Supplies.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Supplies.Application, []},
-      applications: [:amqp]
+      # mod: {Supplies.Application, []},
     ]
   end
 
