@@ -1,27 +1,25 @@
 defmodule Server do
   use GenServer
 
+  def create_queue(channel, item) do
+    {:ok, %{queue: queue}} = AMQP.Queue.declare(channel, item)
+    AMQP.Basic.consume(channel, queue, nil, no_ack: false)
+    AMQP.Queue.bind(channel, queue, "orders", routing_key: item)
+    queue
+  end
+
   def start_link({name, items}) do
     {:ok, connection} = AMQP.Connection.open()
     {:ok, channel} = AMQP.Channel.open(connection)
-    AMQP.Basic.qos(channel, prefetch_count: 1)
-
     AMQP.Exchange.declare(channel, "orders", :direct)
     AMQP.Exchange.declare(channel, "processed", :direct)
-
-    {:ok, %{queue: queue}} = AMQP.Queue.declare(channel, "", exclusive: true)
-
-    items
-    |> Enum.map(fn item ->
-      AMQP.Queue.bind(channel, queue, "orders", routing_key: item)
-    end)
-
-    AMQP.Basic.consume(channel, queue, nil, no_ack: false, exclusive: true)
+    AMQP.Basic.qos(channel, prefetch_count: 1)
+    queues = items |> Enum.map(fn item -> create_queue(channel, item) end)
     IO.puts("#{name} zaczyna")
 
     GenServer.start_link(
       __MODULE__,
-      {name, connection, channel, queue},
+      {name, connection, channel, queues},
       name: __MODULE__
     )
   end
@@ -38,14 +36,17 @@ defmodule Server do
   def handle_call(
         {:order, crew, item, meta},
         _,
-        {name, connection, channel, queue} = state
+        {name, connection, channel, queues} = state
       ) do
     AMQP.Basic.ack(channel, meta.delivery_tag)
+
     AMQP.Basic.publish(
       channel,
       "processed",
       crew,
-      item
+      {item, name}
+      |> :erlang.term_to_binary()
+      |> Base.encode64()
     )
 
     IO.puts("Zamawiający: #{crew}, przedmiot: #{item}")
