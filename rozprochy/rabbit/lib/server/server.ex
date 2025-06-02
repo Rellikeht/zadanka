@@ -36,7 +36,7 @@ defmodule Server do
   def handle_call(
         {:order, crew, item, meta},
         _,
-        {name, connection, channel, queues} = state
+        {name, _, channel, _} = state
       ) do
     AMQP.Basic.ack(channel, meta.delivery_tag)
 
@@ -62,7 +62,7 @@ defmodule Server do
     end
   end
 
-  def terminate(_reason, {_, connection, _}) do
+  def terminate(_, {_, connection, _}) do
     AMQP.Connection.close(connection)
   end
 end

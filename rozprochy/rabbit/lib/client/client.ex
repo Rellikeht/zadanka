@@ -25,14 +25,6 @@ defmodule Client do
     {:ok, state}
   end
 
-  def state() do
-    GenServer.call(__MODULE__, :state, :infinity)
-  end
-
-  def handle_call(:state, _, state) do
-    {:reply, state, state}
-  end
-
   def order(item) do
     GenServer.call(__MODULE__, {:order, item}, :infinity)
 
@@ -42,7 +34,15 @@ defmodule Client do
     end
   end
 
-  def handle_call({:order, item}, _, {name, connection, channel, queue} = state) do
+  def confirm(payload, meta) do
+    GenServer.call(__MODULE__, {:confirm, payload, meta}, :infinity)
+  end
+
+  def handle_call(
+        {:order, item},
+        _,
+        {name, _, channel, _} = state
+      ) do
     :ok =
       AMQP.Basic.publish(
         channel,
@@ -54,14 +54,10 @@ defmodule Client do
     {:reply, item, state}
   end
 
-  def confirm(payload, meta) do
-    GenServer.call(__MODULE__, {:confirm, payload, meta}, :infinity)
-  end
-
   def handle_call(
         {:confirm, payload, meta},
         _,
-        {name, connection, channel, queue} = state
+        {_, _, channel, _} = state
       ) do
     {:ok, decoded} = payload |> Base.decode64()
     {item, supplier} = decoded |> :erlang.binary_to_term()
@@ -71,7 +67,7 @@ defmodule Client do
     {:reply, payload, state}
   end
 
-  def terminate(_reason, {_, connection, _, _}) do
+  def terminate(_, {_, connection, _, _}) do
     AMQP.Connection.close(connection)
   end
 end
