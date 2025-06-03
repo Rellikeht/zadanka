@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -7,8 +8,6 @@
 
 using namespace std;
 using namespace chrono;
-
-const int RUNS = 10;
 
 #define SOLVE(A, b) solution = gaussianElimination(A, b)
 
@@ -161,11 +160,11 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  long long elapsed_time = 0;
-  int retval;
+  int retval = 0;
+  const int choice = stoi(argv[1]);
 
-  switch (stoi(argv[1])) {
-  case 1: {
+  switch (choice) {
+  case 0: {
     /* PAPI FLOPS variables */
     float real_time, proc_time, mflops;
     long long flpops;
@@ -199,18 +198,20 @@ int main(int argc, char **argv) {
     break;
   }
 
-  case 2: {
+  case 1: {
     /* PAPI counters variables */
     int EventSet = PAPI_NULL;
     /* must be initialized to PAPI_NULL before calling
      * PAPI_create_event*/
-    int event_codes[NUM_EVENT] = {PAPI_TOT_INS, PAPI_TOT_CYC};
-    char errstring[PAPI_MAX_STR_LEN];
-    long long values[NUM_EVENT];
+    array<int, NUM_EVENT> event_codes = {
+        PAPI_TOT_INS, PAPI_TOT_CYC
+    };
+    array<char, PAPI_MAX_STR_LEN> errstring;
+    array<long long, NUM_EVENT> values;
 
     retval = PAPI_library_init(PAPI_VER_CURRENT);
     if (retval != PAPI_VER_CURRENT) {
-      fprintf(stderr, "Error: %s\n", errstring);
+      fprintf(stderr, "Error: %s\n", errstring.data());
       quick_exit(1);
     }
     /* Creating event set */
@@ -220,7 +221,8 @@ int main(int argc, char **argv) {
     }
     /* Add the array of events PAPI_TOT_INS and PAPI_TOT_CYC to the
      * eventset */
-    retval = PAPI_add_events(EventSet, event_codes, NUM_EVENT);
+    retval =
+        PAPI_add_events(EventSet, event_codes.data(), NUM_EVENT);
     if (retval != PAPI_OK) {
       ERROR_RETURN(retval);
     }
@@ -231,7 +233,7 @@ int main(int argc, char **argv) {
     }
 
     SOLVE(A, b);
-    retval = PAPI_stop(EventSet, values);
+    retval = PAPI_stop(EventSet, values.data());
     if (retval != PAPI_OK) {
       ERROR_RETURN(retval);
     }
@@ -241,7 +243,8 @@ int main(int argc, char **argv) {
   }
 
   default:
-    for (i = 0; i < RUNS; i++) {
+    long long elapsed_time = 0;
+    for (i = 0; i < (size_t) choice; i++) {
       auto start_time = high_resolution_clock::now();
       SOLVE(A, b);
       auto end_time = high_resolution_clock::now();
@@ -249,7 +252,7 @@ int main(int argc, char **argv) {
           duration_cast<microseconds>(end_time - start_time)
               .count();
     }
-    elapsed_time /= RUNS;
+    elapsed_time /= choice;
     cout << "Time elapsed: " << elapsed_time << "μs\n";
     break;
   }
