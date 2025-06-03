@@ -17,10 +17,9 @@
           ninja
           meson
 
-          # should all be on the host
-          # binutils # for gprof
-          # gcc
-          # clang-tools
+          binutils # for gprof
+          gcc
+          clang-tools
         ];
 
         buildInputs = with pkgs; [
@@ -37,21 +36,6 @@
             hardeningDisable = ["fortify"];
             shellHook = '''';
           };
-        };
-
-        packages = rec {
-          run = pkgs.writeScriptBin "run" ''
-            echo "Do the thing"
-          '';
-          default = run;
-        };
-
-        apps = rec {
-          run = {
-            type = "app";
-            program = "${self.packages.${system}.run}/bin/run";
-          };
-          default = run;
         };
       }
     );
