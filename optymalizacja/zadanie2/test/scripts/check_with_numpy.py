@@ -1,7 +1,9 @@
-from numpy.linalg import inv
+from numpy.linalg import solve
+import numpy as np
 import subprocess as sp
 from sys import argv, stdin
 from os import path
+DTYPE = np.float64
 
 if len(argv) < 2:
     print("Give exec to test")
@@ -17,15 +19,29 @@ else:
 def test() -> int:
     raw = [file.readline()]
     N = int(raw[0])
+
+    lns = []
     for _ in range(N):
-        raw.append(file.readline())
+        line = file.readline()
+        raw.append(line)
+        ln = list(map(float, line.split()))
+        lns.append(ln)
+    A = np.matrix(np.array(lns, dtype=DTYPE))
+
+    raw.append(file.readline())
+    line = file.readline()
+    raw.append(line)
+    ln = list(map(float, line.split()))
+    B = np.array(ln, dtype=DTYPE)
 
     file.readline()
-    raw.append(file.readline())
-    file.readline()
-    C = list(map(float, file.readline().split()))
+    ln = list(map(float, file.readline().split()))
+    C = np.array(ln, dtype=DTYPE)
 
     print(f"Testing {FNAME}")
+    np_sol = solve(A, B)
+    np_sol = np.array(np_sol)
+
     pipe = sp.Popen(
         [path.abspath(argv[1])],
         stdin=sp.PIPE,
@@ -38,17 +54,22 @@ def test() -> int:
     )
     sol = list(map(float, raw_output.split()))
 
-    if all(C[i] == sol[i] for i in range(N)):
-        print(f"{argv[1]} gives correct result!")
+    if all(np_sol == sol):
+        print(f"{argv[1]} gives similar result to numpy!")
         return 0
 
-    print(f"{argv[1]} output differs from correct result")
-    print("Program solution:")
+    print(f"{argv[1]} output differs from numpy")
+    print(f"{argv[1]} solution:")
     for e in sol:
         print(e, end=" ")
     print()
 
-    print("Correct solution:")
+    print("Numpy solution:")
+    for e in np_sol:
+        print(e, end=" ")
+    print()
+
+    print("Proper solution:")
     for e in C:
         print(e, end=" ")
     print()
