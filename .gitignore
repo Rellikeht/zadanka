@@ -40,6 +40,12 @@ html_files/
 
 !/.gitignore
 
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache
+
 /sysopy/**/*.test
 /sysopy/**/*.diff
 /sysopy/**/pomiar*
@@ -83,3 +89,5 @@ flake.lock
 mix.lock
 .rabbitmq
 deps/
+.local.*
+.*.local
