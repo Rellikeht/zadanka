@@ -9,7 +9,7 @@
 using namespace std;
 using namespace chrono;
 
-#define SOLVE(A, b) solution = gaussianElimination(A, b)
+#define SOLVE(A, b) gaussianElimination(A, b)
 
 /* PAPI macro helpers definitions */
 #define NUM_EVENT 2
@@ -26,13 +26,22 @@ using namespace chrono;
     quick_exit(retval);                                            \
   }
 
-vector<double> gaussianElimination(
-    const vector<vector<double>> &A, const vector<double> &b
+/**
+ * Solve the linear system A x = b using Gaussian elimination with
+ * complete pivoting, modifying A and b in-place and leaving the
+ * solution in b.
+ *
+ * @param A   A square matrix (n × n) represented as a vector of n
+ *            vectors of length n. This matrix will be modified.
+ * @param b   A right-hand side vector of length n. On output, this
+ *            will contain the solution x.
+ * @throws    std::runtime_error if the matrix is singular (zero
+ *            pivot encountered).
+ */
+void gaussianElimination(
+    vector<vector<double>> &A, vector<double> &b
 ) {
   size_t n = A.size();
-  vector<vector<double>> M = A;
-  vector<double> rhs = b;
-
   vector<size_t> colIndex(n);
   for (size_t i = 0; i < n; ++i) {
     colIndex[i] = i;
@@ -43,7 +52,7 @@ vector<double> gaussianElimination(
     size_t iMax = k, jMax = k;
     for (size_t i = k; i < n; ++i) {
       for (size_t j = k; j < n; ++j) {
-        double aij = std::abs(M[i][j]);
+        double aij = std::abs(A[i][j]);
         if (aij > maxVal) {
           maxVal = aij;
           iMax = i;
@@ -59,28 +68,28 @@ vector<double> gaussianElimination(
     }
 
     if (iMax != k) {
-      std::swap(M[k], M[iMax]);
-      std::swap(rhs[k], rhs[iMax]);
+      std::swap(A[k], A[iMax]);
+      std::swap(b[k], b[iMax]);
     }
 
     if (jMax != k) {
       for (size_t row = 0; row < n; ++row) {
-        std::swap(M[row][k], M[row][jMax]);
+        std::swap(A[row][k], A[row][jMax]);
       }
       std::swap(colIndex[k], colIndex[jMax]);
     }
 
-    double pivot = M[k][k];
+    double pivot = A[k][k];
     for (size_t i = k + 1; i < n; ++i) {
-      double factor = M[i][k] / pivot;
+      double factor = A[i][k] / pivot;
       for (size_t j = k; j < n; ++j) {
-        M[i][j] -= factor * M[k][j];
+        A[i][j] -= factor * A[k][j];
       }
-      rhs[i] -= factor * rhs[k];
+      b[i] -= factor * b[k];
     }
   }
 
-  if (M[n - 1][n - 1] == 0.0) {
+  if (A[n - 1][n - 1] == 0.0) {
     throw std::runtime_error(
         "Matrix is singular (zero pivot encountered)."
     );
@@ -88,19 +97,16 @@ vector<double> gaussianElimination(
 
   vector<double> y(n, 0.0);
   for (int i = int(n) - 1; i >= 0; --i) {
-    double sum = rhs[i];
+    double sum = b[i];
     for (size_t j = i + 1; j < n; ++j) {
-      sum -= M[i][j] * y[j];
+      sum -= A[i][j] * y[j];
     }
-    y[i] = sum / M[i][i];
+    y[i] = sum / A[i][i];
   }
 
-  vector<double> x(n, 0.0);
   for (size_t i = 0; i < n; ++i) {
-    x[colIndex[i]] = y[i];
+    b[colIndex[i]] = y[i];
   }
-
-  return x;
 }
 
 int main(int argc, char **argv) {
@@ -111,7 +117,7 @@ int main(int argc, char **argv) {
   size_t size, i, j;
   cin >> size;
   vector<vector<double>> A;
-  vector<double> b, solution;
+  vector<double> b;
 
   A.resize(size);
   for (i = 0; i < size; i++) {
@@ -129,7 +135,7 @@ int main(int argc, char **argv) {
   if (argc < 2) {
     SOLVE(A, b);
     for (i = 0; i < size; ++i) {
-      cout << solution[i] << " ";
+      cout << b[i] << " ";
     }
     cout << "\n";
     return 0;
@@ -219,7 +225,7 @@ int main(int argc, char **argv) {
 
   default:
     long long elapsed_time = 0;
-    for (i = 0; i < (size_t) choice; i++) {
+    for (i = 0; i < (size_t)choice; i++) {
       auto start_time = high_resolution_clock::now();
       SOLVE(A, b);
       auto end_time = high_resolution_clock::now();

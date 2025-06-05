@@ -1,9 +1,11 @@
-project('zadanie', 'cpp')
+project('zadanie', ['cpp', 'c'])
 add_global_link_arguments('-lm', '-lpapi', language : ['c', 'cpp'])
 CFLAGS = ['-Wall', '-Wextra']
 
+executable('papi_test', 'papi_test.c')
 foreach file : [
-  'wersja0'
+  'wersja0',
+  'wersja1'
 ]
   src = file+'.cpp'
   executable(file, src, cpp_args: []+CFLAGS)
