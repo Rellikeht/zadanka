@@ -24,75 +24,80 @@ using namespace chrono;
     quick_exit(retval);                                            \
   }
 
-#define SOLVE(A, b) gaussianElimination((A).data(), (b).data(), size)
+#define SOLVE(A, b)                                                \
+  gaussianElimination((A).data(), (b).data(), size)
 
 #define IDX(A, w, i, j) A[(i) * (w) + (j)]
 
 void gaussianElimination(double *A, double *b, size_t n) {
-    std::vector<size_t> colIndex(n);
-    size_t *col_index = colIndex.data();
-    for (size_t i = 0; i < n; ++i) {
-        col_index[i] = i;
+  std::vector<size_t> colIndexBack(n);
+  size_t *colIndex = colIndexBack.data();
+  for (size_t i = 0; i < n; ++i) {
+    colIndex[i] = i;
+  }
+
+  for (size_t k = 0; k < n - 1; ++k) {
+    double maxVal = 0.0;
+    size_t iMax = k, jMax = k;
+    for (size_t i = k; i < n; ++i) {
+      for (size_t j = k; j < n; ++j) {
+        double aij = std::abs(IDX(A, n, i, j));
+        if (aij > maxVal) {
+          maxVal = aij;
+          iMax = i;
+          jMax = j;
+        }
+      }
     }
 
-    for (size_t k = 0; k < n - 1; ++k) {
-        double maxVal = 0.0;
-        size_t iMax = k, jMax = k;
-        for (size_t i = k; i < n; ++i) {
-            for (size_t j = k; j < n; ++j) {
-                double aij = std::abs(IDX(A, n, i, j));
-                if (aij > maxVal) {
-                    maxVal = aij;
-                    iMax = i;
-                    jMax = j;
-                }
-            }
-        }
-
-        if (maxVal == 0.0) {
-            throw std::runtime_error("Matrix is singular (zero pivot encountered).");
-        }
-
-        if (iMax != k) {
-            for (size_t j = 0; j < n; ++j) {
-                std::swap(IDX(A, n, k, j), IDX(A, n, iMax, j));
-            }
-            std::swap(b[k], b[iMax]);
-        }
-
-        if (jMax != k) {
-            for (size_t i = 0; i < n; ++i) {
-                std::swap(IDX(A, n, i, k), IDX(A, n, i, jMax));
-            }
-            std::swap(col_index[k], colIndex[jMax]);
-        }
-
-        double pivot = IDX(A, n, k, k);
-        for (size_t i = k + 1; i < n; ++i) {
-            double factor = IDX(A, n, i, k) / pivot;
-            for (size_t j = k; j < n; ++j) {
-                IDX(A, n, i, j) -= factor * IDX(A, n, k, j);
-            }
-            b[i] -= factor * b[k];
-        }
+    if (maxVal == 0.0) {
+      throw std::runtime_error(
+          "Matrix is singular (zero pivot encountered)."
+      );
     }
 
-    if (IDX(A, n, n - 1, n - 1) == 0.0) {
-        throw std::runtime_error("Matrix is singular (zero pivot encountered).");
+    if (iMax != k) {
+      for (size_t j = 0; j < n; ++j) {
+        std::swap(IDX(A, n, k, j), IDX(A, n, iMax, j));
+      }
+      std::swap(b[k], b[iMax]);
     }
 
-    std::vector<double> y(n, 0.0);
-    for (int i = int(n) - 1; i >= 0; --i) {
-        double sum = b[i];
-        for (size_t j = i + 1; j < n; ++j) {
-            sum -= IDX(A, n, i, j) * y[j];
-        }
-        y[i] = sum / IDX(A, n, i, i);
+    if (jMax != k) {
+      for (size_t i = 0; i < n; ++i) {
+        std::swap(IDX(A, n, i, k), IDX(A, n, i, jMax));
+      }
+      std::swap(colIndex[k], colIndexBack[jMax]);
     }
 
-    for (size_t i = 0; i < n; ++i) {
-        b[col_index[i]] = y[i];
+    double pivot = IDX(A, n, k, k);
+    for (size_t i = k + 1; i < n; ++i) {
+      double factor = IDX(A, n, i, k) / pivot;
+      for (size_t j = k; j < n; ++j) {
+        IDX(A, n, i, j) -= factor * IDX(A, n, k, j);
+      }
+      b[i] -= factor * b[k];
     }
+  }
+
+  if (IDX(A, n, n - 1, n - 1) == 0.0) {
+    throw std::runtime_error(
+        "Matrix is singular (zero pivot encountered)."
+    );
+  }
+
+  std::vector<double> y(n, 0.0);
+  for (int i = int(n) - 1; i >= 0; --i) {
+    double sum = b[i];
+    for (size_t j = i + 1; j < n; ++j) {
+      sum -= IDX(A, n, i, j) * y[j];
+    }
+    y[i] = sum / IDX(A, n, i, i);
+  }
+
+  for (size_t i = 0; i < n; ++i) {
+    b[colIndex[i]] = y[i];
+  }
 }
 
 int main(int argc, char **argv) {
@@ -105,7 +110,7 @@ int main(int argc, char **argv) {
   vector<double> A;
   vector<double> b;
 
-  A.resize(size*size);
+  A.resize(size * size);
   for (i = 0; i < size; i++) {
     for (j = 0; j < size; j++) {
       cin >> IDX(A, size, i, j);

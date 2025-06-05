@@ -5,7 +5,7 @@ CFLAGS = ['-Wall', '-Wextra']
 executable('papi_test', 'papi_test.c')
 foreach file : [
   'wersja0',
-  'wersja1'
+  'wersja1',
 ]
   src = file+'.cpp'
   executable(file, src, cpp_args: []+CFLAGS)

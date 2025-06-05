@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
 
   default:
     long long elapsed_time = 0;
-    for (i = 0; i < (size_t) choice; i++) {
+    for (i = 0; i < (size_t)choice; i++) {
       auto start_time = high_resolution_clock::now();
       SOLVE(A, b);
       auto end_time = high_resolution_clock::now();
