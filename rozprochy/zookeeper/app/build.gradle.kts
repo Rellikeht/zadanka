@@ -47,6 +47,13 @@ tasks {
     }
 
     register<JavaExec>("Executor") {
+        // arguments
+        // if(project.hasProperty("argv")) {
+        //     args(project.property("argv").split(','))
+        //     // args(project.property("argv"))
+        // }
+        args(System.getProperty("exec.args", "").split(","))
+
         // main class
         mainClass.set("zadanie.Executor")
         // to use compiled classes 
@@ -54,13 +61,6 @@ tasks {
         // to have working standard input
         standardInput = System.`in`
         // for gradle to see main method/class ?
-        classpath = sourceSets["main"].runtimeClasspath
-    }
-
-    register<JavaExec>("DataMonitor") {
-        dependsOn("classes")
-        mainClass.set("zadanie.DataMonitor")
-        standardInput = System.`in`
         classpath = sourceSets["main"].runtimeClasspath
     }
 }
