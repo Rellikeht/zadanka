@@ -2,7 +2,7 @@ import subprocess
 from kazoo.client import KazooClient  # type: ignore
 from sys import argv
 from threading import Lock
-# from pathlib import Path
+import signal
 
 # https://stackoverflow.com/a/76691030
 ELBOW = "└──"
@@ -31,6 +31,13 @@ class ZooKeeperApp:
                     ZNODE_PATH, children
                 )
             )
+
+        def sigint_handler(signum, stack):
+            print("Finishing")
+            self.exit()
+            exit(0)
+
+        signal.signal(signal.SIGINT, sigint_handler)
         self.lock.acquire(True)
         self.lock.acquire(True)
 
@@ -77,10 +84,17 @@ class ZooKeeperApp:
 
         self.all_children = 0
         self.tree_view = ""
+        self.children = self.zk.get_children(ZNODE_PATH)
         self.update_tree_view(ZNODE_PATH, "")
         print("Updated tree:")
         print(self.tree_view)
-        self.update_children()
+        self.message(
+            "Children changed",
+            f"""
+Direct children: {str(len(self.children))}
+All children: {str(self.all_children)}
+            """,
+        )
 
     def update_tree_view(self, node, parent, last=True, header=""):
         children = self.zk.get_children(node)
@@ -95,21 +109,6 @@ class ZooKeeperApp:
                 i == len(children) - 1,
                 header + (BLANK if last else PIPE),
             )
-
-    def update_children(self):
-        try:
-            self.children = self.zk.get_children(ZNODE_PATH)
-        except Exception:
-            self.children = []
-            return
-
-        self.message(
-            "Children changed",
-            f"""
-Direct children: {str(len(self.children))}
-All children: {str(self.all_children)}
-            """,
-        )
 
 
 if __name__ == "__main__":
