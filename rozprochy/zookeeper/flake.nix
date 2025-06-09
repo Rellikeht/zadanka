@@ -17,6 +17,7 @@
           python313Full
           uv
           zookeeper
+          libnotify
         ];
 
         libs = with pkgs; [

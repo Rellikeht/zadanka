@@ -1,2 +1,7 @@
 kazoo
+
+python-lsp-server
+mypy
+pylsp-mypy
+ruff
 bpython
