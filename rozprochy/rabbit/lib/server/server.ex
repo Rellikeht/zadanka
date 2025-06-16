@@ -24,18 +24,19 @@ defmodule Server do
     )
   end
 
+  @impl true
   def init(state) do
     Process.flag(:trap_exit, true)
     {:ok, state}
   end
 
   def order(crew, item, meta) do
-    GenServer.call(__MODULE__, {:order, crew, item, meta})
+    GenServer.cast(__MODULE__, {:order, crew, item, meta})
   end
 
-  def handle_call(
+  @impl true
+  def handle_cast(
         {:order, crew, item, meta},
-        _,
         {name, _, channel, _} = state
       ) do
     AMQP.Basic.ack(channel, meta.delivery_tag)
@@ -51,7 +52,7 @@ defmodule Server do
 
     IO.puts("Zamawiający: #{crew}, przedmiot: #{item}")
 
-    {:reply, item, state}
+    {:noreply, state}
   end
 
   def serve() do
@@ -62,6 +63,7 @@ defmodule Server do
     end
   end
 
+  @impl true
   def terminate(_, {_, connection, _}) do
     AMQP.Connection.close(connection)
   end

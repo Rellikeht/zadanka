@@ -15,33 +15,39 @@ defmodule Client do
 
     GenServer.start_link(
       __MODULE__,
-      {name, connection, channel, queue},
+      {name, connection, channel, queue, []},
       name: __MODULE__
     )
   end
 
+  @impl true
   def init(state) do
     Process.flag(:trap_exit, true)
     {:ok, state}
   end
 
   def order(item) do
-    GenServer.call(__MODULE__, {:order, item}, :infinity)
+    GenServer.cast(__MODULE__, {:order, item})
+  end
 
+  def confirm() do
     receive do
       {:basic_deliver, payload, meta} ->
-        confirm(payload, meta)
+        GenServer.call(__MODULE__, {:confirm, payload, meta}, :infinity)
     end
   end
 
-  def confirm(payload, meta) do
-    GenServer.call(__MODULE__, {:confirm, payload, meta}, :infinity)
+  def wait_for_all() do
+    items = elem(:sys.get_state(__MODULE__), 4)
+    if length(items) > 0 do
+      confirm()
+    end
   end
 
-  def handle_call(
+  @impl true
+  def handle_cast(
         {:order, item},
-        _,
-        {name, _, channel, _} = state
+        {name, _, channel, _, items} = state
       ) do
     :ok =
       AMQP.Basic.publish(
@@ -51,22 +57,25 @@ defmodule Client do
         name
       )
 
-    {:reply, item, state}
+    new_state = put_elem(state, 4, [item | items])
+    {:noreply, new_state}
   end
 
+  @impl true
   def handle_call(
         {:confirm, payload, meta},
         _,
-        {_, _, channel, _} = state
+        {_, _, channel, _, items} = state
       ) do
     {:ok, decoded} = payload |> Base.decode64()
     {item, supplier} = decoded |> :erlang.binary_to_term()
-
     AMQP.Basic.ack(channel, meta.delivery_tag)
     IO.puts("Zamówiono #{item} u #{supplier}")
-    {:reply, payload, state}
+    new_state = put_elem(state, 4, tl(items))
+    {:reply, payload, new_state}
   end
 
+  @impl true
   def terminate(_, {_, connection, _, _}) do
     AMQP.Connection.close(connection)
   end
