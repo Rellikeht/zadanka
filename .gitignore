@@ -85,8 +85,6 @@ tmp/
 !/kompilatory/**/bck
 optymalizacja/**/tests
 
-flake.lock
-mix.lock
 .rabbitmq
 deps/
 .local.*
