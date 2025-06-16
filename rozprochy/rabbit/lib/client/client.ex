@@ -37,10 +37,12 @@ defmodule Client do
     end
   end
 
-  def wait_for_all() do
+  def confirm_all() do
     items = elem(:sys.get_state(__MODULE__), 4)
+
     if length(items) > 0 do
       confirm()
+      confirm_all()
     end
   end
 
@@ -68,15 +70,15 @@ defmodule Client do
         {_, _, channel, _, items} = state
       ) do
     {:ok, decoded} = payload |> Base.decode64()
-    {item, supplier} = decoded |> :erlang.binary_to_term()
+    {item, supplier, id} = decoded |> :erlang.binary_to_term()
     AMQP.Basic.ack(channel, meta.delivery_tag)
-    IO.puts("Zamówiono #{item} u #{supplier}")
+    IO.puts("Zamówiono #{item} (numer zamówienia #{id}) u #{supplier}")
     new_state = put_elem(state, 4, tl(items))
     {:reply, payload, new_state}
   end
 
   @impl true
-  def terminate(_, {_, connection, _, _}) do
+  def terminate(_, {_, connection, _, _, _}) do
     AMQP.Connection.close(connection)
   end
 end

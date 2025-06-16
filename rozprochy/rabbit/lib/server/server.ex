@@ -19,7 +19,7 @@ defmodule Server do
 
     GenServer.start_link(
       __MODULE__,
-      {name, connection, channel, queues},
+      {name, connection, channel, queues, 0},
       name: __MODULE__
     )
   end
@@ -37,22 +37,25 @@ defmodule Server do
   @impl true
   def handle_cast(
         {:order, crew, item, meta},
-        {name, _, channel, _} = state
+        {name, _, channel, _, id} = state
       ) do
-    AMQP.Basic.ack(channel, meta.delivery_tag)
+    spawn(fn ->
+      AMQP.Basic.ack(channel, meta.delivery_tag)
 
-    AMQP.Basic.publish(
-      channel,
-      "processed",
-      crew,
-      {item, name}
-      |> :erlang.term_to_binary()
-      |> Base.encode64()
-    )
+      AMQP.Basic.publish(
+        channel,
+        "processed",
+        crew,
+        {item, name, id}
+        |> :erlang.term_to_binary()
+        |> Base.encode64()
+      )
 
-    IO.puts("Zamawiający: #{crew}, przedmiot: #{item}")
+      IO.puts("Zamawiający: #{crew}, przedmiot: #{item}, numer zamówienia: #{id}")
+    end)
 
-    {:noreply, state}
+    new_state = put_elem(state, 4, id + 1)
+    {:noreply, new_state}
   end
 
   def serve() do
@@ -64,7 +67,7 @@ defmodule Server do
   end
 
   @impl true
-  def terminate(_, {_, connection, _}) do
+  def terminate(_, {_, connection, _, _, _}) do
     AMQP.Connection.close(connection)
   end
 end
