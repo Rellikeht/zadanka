@@ -5,25 +5,7 @@ using Makie: AbstractAxis
 
 const DEFAULT_ACCURACY = 100
 const DEFAULT_DEGREE = 2
-
-# const DEFAULT_PLOT_KWARGS = Dict(
-#     :linewidth => 4
-# )
-# const DEFAULT_SCATTER_KWARGS = Dict(
-#     :color => :red,
-#     :markersize => 15
-# )
-
-const DEFAULT_PLOT_KWARGS = Dict(
-    :linewidth => 4,
-    :colormap => :viridis,
-    :color => 1:100,
-)
-const DEFAULT_SCATTER_KWARGS = Dict(
-    :colormap => :viridis,
-    :color => 1:100,
-    :markersize => 15
-)
+const DEFAULT_INDICATOR = (default=true,)
 
 GLMakie.activate!(framerate=60)
 
@@ -57,6 +39,91 @@ end
 
 #= }}}=#
 
+#= colors {{{=#
+
+# const DEFAULT_PLOT_KWARGS = Dict(
+#     :linewidth => 4
+# )
+# const DEFAULT_SCATTER_KWARGS = Dict(
+#     :color => :red,
+#     :markersize => 15
+# )
+
+function color_range_observable(points::Observable{<:AbstractVecOrMat})
+    range = Observable(eachindex(points[]))
+    on(points) do _
+        range[] = eachindex(points[])
+    end
+    return range
+end
+
+function color_range_observable(range::Observable{AbstractUnitRange})
+    return range
+end
+
+function color_range_observable(range::AbstractUnitRange)
+    return range
+end
+
+function color_range_observable(points::AbstractVecOrMat)
+    return eachindex(points)
+end
+
+function default_kwargs(
+    type::Symbol,
+    kwargs::Union{Dict,NamedTuple,Nothing},
+    base::Union{
+        AbstractUnitRange,
+        AbstractVecOrMat,
+        Observable{<:Union{AbstractUnitRange,AbstractVecOrMat}}
+    }
+)
+    range = color_range_observable(base)
+    if kwargs === nothing
+        return Dict()
+    elseif kwargs != DEFAULT_INDICATOR
+        # TODO test
+        return Dict((
+            k => if v === :auto
+                range
+            else
+                v
+            end
+            for (k, v) in pairs(kwargs)
+        ))
+        # return kwargs
+    end
+    if type == :plot
+        return Dict(
+            :linewidth => 4,
+            :colormap => :viridis,
+            :color => range,
+        )
+    elseif type == :scatter
+        return Dict(
+            :colormap => :viridis,
+            :color => range,
+            :markersize => 15
+        )
+    elseif type == :plot_3d
+        return Dict(
+            :linewidth => 3,
+        )
+    elseif type == :scatter_3d
+        return Dict(
+            :colormap => :viridis,
+            :color => range,
+            :markersize => 10
+        )
+    else
+        error("No default args defined for: $(type)")
+    end
+end
+
+# function default_scatter_color
+
+#= }}}=#
+
 #= splines {{{=#
 
 #= definitions {{{=#
@@ -67,7 +134,7 @@ struct Spline{R<:Real,N} <: AbstractLine
     knots::Observable{<:AbstractVector{R}}
     points::NTuple{N,Observable{<:AbstractVector{R}}}
     line::NTuple{N,Observable{<:AbstractVector{R}}}
-    ts::AbstractVector{R}
+    ts::Observable{<:AbstractVector{R}}
 end
 
 function Spline(
@@ -103,7 +170,7 @@ function Spline(
         tuple((
             Observable(Vector{R}(undef, accuracy)) for _ in 1:length(positions)
         )...),
-        Vector{R}(undef, accuracy),
+        Observable(Vector{R}(undef, accuracy)),
     )
     on(spline.accuracy) do _
         adjust_sizes!(spline)
@@ -163,11 +230,10 @@ end
 
 function adjust_sizes!(spline::Spline)
     (vec -> resize!(vec[], spline.accuracy[])).(spline.line)
-    resize!(spline.ts, spline.accuracy[])
+    resize!(spline.ts[], spline.accuracy[])
     ts_size = maximum(spline.knots[])
     step = ts_size / (spline.accuracy[] - 1)
-    spline.ts .= 0:step:ts_size
-    notify(spline.line[begin])
+    spline.ts[] .= 0:step:ts_size
 end
 
 #= }}}=#
@@ -218,14 +284,14 @@ function calc_points!(spline::Spline)
         for i in eachindex(spline.points[begin][])
             spline.line[dim][] .+=
                 spline.points[dim][][i] *
-                calc_point.((spline,), i, spline.ts)
+                calc_point.((spline,), i, spline.ts[])
         end
         # no even slighest clue why this works, but this works
         adjusted_end = length(spline.knots[]) - spline.degree[] - 1
         for i in length(spline.points[begin][])+1:adjusted_end
             spline.line[dim][] .+=
                 spline.points[dim][][end] *
-                calc_point.((spline,), i, spline.ts)
+                calc_point.((spline,), i, spline.ts[])
         end
     end
     notify(spline.line[begin])
@@ -240,7 +306,7 @@ function draw_splines(
     degree::Integer=DEFAULT_DEGREE,
     accuracy::Integer=DEFAULT_ACCURACY;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_PLOT_KWARGS,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 ) where {R<:Real}
     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
     ax = Axis(fig[1, 1])
@@ -252,7 +318,7 @@ function draw_splines(
         if i == 1
             values[begin] += 1
         end
-        lines!(ax, range, values; (plot_kwargs === nothing ? Dict() : plot_kwargs)...)
+        lines!(ax, range, values; default_kwargs(:plot, plot_kwargs, range)...)
     end
     return fig
 end
@@ -266,8 +332,8 @@ end
 #= definitions {{{=#
 
 struct SplinePlane{R<:Real} <: AbstractPlane
-    xline::Observable{Spline{R,2}}
-    yline::Observable{Spline{R,2}}
+    xline::Observable{Spline{R,1}}
+    yline::Observable{Spline{R,1}}
     coeffs::Observable{<:AbstractMatrix{R}}
     plane::Observable{<:AbstractMatrix{R}}
 end
@@ -323,34 +389,40 @@ function SplinePlane(
 end
 
 function SplinePlane(
-    splines::NTuple{2,Spline{<:Real,2}},
+    splines::NTuple{2,Spline{<:Real,1}},
     coeffs::Union{AbstractMatrix{<:Real},Nothing}=nothing
 )
-    plane_dims = (splines[2].accuracy[], splines[1].accuracy[])
+    plane_dims = (splines[1].accuracy[], splines[2].accuracy[])
     R = typeof(splines[begin]).parameters[1]
+    # TODO checks
     if coeffs === nothing
         coeffs = fill(R(1), plane_dims)
     else
         coeffs = R.(coeffs)
     end
-    plane = fill(R(1), plane_dims)
-    # TODO checks
+    plane = zeros(R, plane_dims)
     plane = SplinePlane(
         Observable(splines[1]),
         Observable(splines[2]),
         Observable(coeffs),
         Observable(plane),
     )
-    # TODO resizing
-
+    calc_points!(plane)
     on(plane.coeffs) do _
+        adjust_to_coeffs!(plane)
         calc_points!(plane)
     end
-    on(plane.xline) do _
-        calc_points!(plane)
+    on(plane.xline[].line[begin]) do _
+        if size(plane.plane[]) == size(plane.coeffs[])
+            adjust_sizes!(plane)
+            calc_points!(plane)
+        end
     end
-    on(plane.yline) do _
-        calc_points!(plane)
+    on(plane.yline[].line[begin]) do _
+        if size(plane.plane[]) == size(plane.coeffs[])
+            adjust_sizes!(plane)
+            calc_points!(plane)
+        end
     end
     return plane
 end
@@ -359,27 +431,58 @@ end
 
 #= calculations {{{=#
 
-function calc_points!(plane::SplinePlane)
-    for (y, yv) in enumerate(plane.xline[].line[])
-        for (x, xv) in enumerate(plane.xline[].line[])
-            plane.plane[][y, x] = xv * yv * plane.coeffs[][y, x]
+function adjust_sizes!(plane::SplinePlane)
+    R = typeof(plane).parameters[1]
+    plane_dims = (plane.xline[].accuracy[], plane.yline[].accuracy[])
+    if size(plane.plane[]) != plane_dims
+        plane.plane[] = zeros(R, plane_dims)
+    end
+    if size(plane.coeffs[]) != plane_dims
+        coeffs = plane.coeffs[]
+        plane.coeffs[] = fill(R(1), plane_dims)
+        old_size = size(coeffs)
+        new_size = size(plane.coeffs[])
+        for i in new_size[2]
+            for j in new_size[1]
+                old_j = div(j * old_size[1], new_size[1])
+                old_i = div(i * old_size[2], new_size[2])
+                plane.coeffs[][j, i] = coeffs[old_j, old_i]
+            end
         end
     end
+end
+
+function adjust_to_coeffs!(plane::SplinePlane)
+    if (plane.xline[].accuracy[], plane.xline[].accuracy[]) == size(plane.coeffs[])
+        return
+    end
+    plane.xline[].accuracy[], plane.yline[].accuracy[] = size(plane.coeffs[])
+    plane.plane[] = zeros(typeof(plane).parameters[1], size(plane.coeffs[]))
+end
+
+function calc_points!(plane::SplinePlane{R}) where {R<:Real}
+    yline = plane.yline[].line[begin][]
+    @views for y in eachindex(yline)
+        plane.plane[][:, y] .=
+            yline[y] .*
+            plane.xline[].line[begin][][:] .*
+            plane.coeffs[][:, y]
+    end
+    notify(plane.plane)
 end
 
 #= }}}=#
 
 #= }}}=#
 
-#= demo {{{=#
+#= demos {{{=#
 
 struct Demo
-    # TODO
-    # multiple of that
+    # TODO multiple of that ???
     object::AbstractParametric
     fig::Figure
     ax::AbstractAxis
-    plot::Lines
+    plot::AbstractPlot
     scatter::Union{Scatter,Nothing}
     moving::Observable{Union{Int,Nothing}}
 end
@@ -393,13 +496,14 @@ end
 function Demo(
     line::AbstractLine;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_SCATTER_KWARGS,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_PLOT_KWARGS,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    dims::AbstractUnitRange=1:2,
 )
     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
     ax = Axis(fig[1, 1])
-    plt = lines!(ax, line.line...; (plot_kwargs === nothing ? Dict() : plot_kwargs)...)
-    sct = scatter!(ax, line.points...; (scatter_kwargs === nothing ? Dict() : scatter_kwargs)...)
+    plt = lines!(ax, line.line[dims]...; (default_kwargs(:plot, plot_kwargs, line.line[begin]))...)
+    sct = scatter!(ax, line.points[dims]...; (default_kwargs(:scatter, scatter_kwargs, line.points[begin]))...)
     moving = Observable(nothing)
     object = Demo(
         line,
@@ -412,40 +516,105 @@ function Demo(
     deregister_interaction!(ax, :rectanglezoom)
     on(
         on_mouse_button(object),
-        events(fig).mousebutton,
+        events(ax).mousebutton,
         priority=5
     )
     on(
         on_mouse_position(object),
-        events(fig).mouseposition,
+        events(ax).mouseposition,
         priority=5
     )
     return object
 end
 
-# TODO
-# function Demo(
-#     plane::AbstractPlane;
-#     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-#     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_SCATTER_KWARGS,
-#     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_PLOT_KWARGS,
-# )
-#     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-#     ax = Axis(fig[1, 1])
-# end
+function calculate_t_obs(
+    t_obs::Observable{<:Vector{<:Real}},
+    spline::Spline,
+)
+    len = length(spline.points[begin][]) - 1
+    resize!(t_obs[], len + 1)
+    t_obs[] .= 0:len
+    t_obs[] .*= spline.ts[][end] / len
+end
+
+function Demo!(
+    ax::Axis,
+    spline::Spline{<:Real,1};
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    plt = lines!(ax, spline.ts, spline.line[begin]; default_kwargs(:plot, plot_kwargs, spline.line[begin])...)
+    R = typeof(spline).parameters[1]
+    t_obs::Observable{Vector{R}} = Observable(Vector{R}(undef, 0))
+    calculate_t_obs(t_obs, spline)
+    on(_ -> calculate_t_obs(t_obs, spline), spline.points[begin])
+    sct = scatter!(ax, t_obs, spline.points[begin]; default_kwargs(:scatter, scatter_kwargs, spline.points[begin])...)
+    moving = Observable(nothing)
+    fig = ax.parent
+    object = Demo(
+        spline,
+        fig,
+        ax,
+        plt,
+        sct,
+        moving,
+    )
+    deregister_interaction!(ax, :rectanglezoom)
+    on(
+        on_mouse_button(object, 1),
+        events(ax).mousebutton,
+        priority=5
+    )
+    on(
+        on_mouse_position(object, 1),
+        events(ax).mouseposition,
+        priority=5
+    )
+    return object
+end
+
+function Demo(
+    spline::Spline{<:Real,1};
+    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
+    ax = Axis(fig[1, 1])
+    return Demo!(ax, spline; scatter_kwargs, plot_kwargs)
+end
 
 #= }}}=#
 
 #= static demo {{{=#
 
 function StaticDemo!(
+    ax::Axis,
+    line::AbstractLine;
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    return StaticDemo!(ax, line; scatter_kwargs, plot_kwargs)
+end
+
+function StaticDemo!(
+    ax::Axis3,
+    line::AbstractLine;
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    return StaticDemo!(ax, line; scatter_kwargs, plot_kwargs)
+end
+
+function StaticDemo!(
     ax::Union{Axis,Axis3},
     line::AbstractLine;
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_SCATTER_KWARGS,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_PLOT_KWARGS,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing},
+    plot_kwargs::Union{Dict,NamedTuple,Nothing},
 )
-    plt = lines!(ax, line.line...; (plot_kwargs === nothing ? Dict() : plot_kwargs)...)
-    sct = scatter!(ax, line.points...; (scatter_kwargs === nothing ? Dict() : scatter_kwargs)...)
+    ptype, stype = (typeof(ax) == Axis3) ? (:plot_3d, :scatter_3d) : (:plot, :scatter)
+    plt = lines!(ax, line.line...; (default_kwargs(ptype, plot_kwargs, line.line[begin]))...)
+    sct = scatter!(ax, line.points...; (default_kwargs(stype, scatter_kwargs, line.points[begin]))...)
     moving = Observable(nothing)
     object = Demo(
         line,
@@ -461,31 +630,34 @@ end
 function StaticDemo!(
     ax::Axis3,
     plane::AbstractPlane;
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_SCATTER_KWARGS,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_PLOT_KWARGS,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
-    plt = lines!(
-        ax,
-        plane.xline[].line,
-        plane.yline[].line,
-        plane.plane;
-        (plot_kwargs === nothing ? Dict() : plot_kwargs)...
-    )
-    # TODO ???
-    # sct = scatter!(
+
+    # plt = contour3d!(
+    # plt = lines!(
     #     ax,
-    #     plane.xline[].line,
-    #     plane.yline[].line,
+    #     plane.xline[].ts,
+    #     plane.yline[].ts,
     #     plane.plane;
-    #     (scatter_kwargs === nothing ? Dict() : scatter_kwargs)...
+    #     default_kwargs(:plot_3d, plot_kwargs, plane.xline[].ts)...
     # )
+
+    sct = scatter!(
+        ax,
+        plane.xline[].ts,
+        plane.yline[].ts,
+        plane.plane;
+        (default_kwargs(:scatter_3d, scatter_kwargs, plane.xline[].ts))...
+    )
+
     moving = Observable(nothing)
     object = Demo(
         plane,
         ax.parent,
         ax,
-        plt,
-        # sct,
+        # # plt,
+        sct,
         nothing,
         moving,
     )
@@ -495,8 +667,8 @@ end
 function StaticDemo(
     line::AbstractLine;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_SCATTER_KWARGS,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_PLOT_KWARGS,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
     ax = nothing
@@ -515,8 +687,8 @@ end
 function StaticDemo(
     plane::AbstractPlane;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_SCATTER_KWARGS,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_PLOT_KWARGS,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
     ax = Axis3(fig[1, 1])
@@ -525,40 +697,83 @@ end
 
 #= }}}=#
 
+#= multi demos {{{=#
+
+function MultiDemo(
+    splines::NTuple{2,Spline},
+    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    return MultiDemo(
+        SplinePlane(splines);
+        fig_kwargs,
+        scatter_kwargs,
+        plot_kwargs,
+    )
+end
+
+function MultiDemo(
+    plane::AbstractPlane;
+    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    scatter_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
+    axs = (Axis3(fig[1:2, 1:2]), Axis(fig[1, 3]), Axis(fig[2, 3]))
+    plane_demo = StaticDemo!(
+        axs[1],
+        plane;
+        scatter_kwargs=scatter_3d_kwargs,
+        plot_kwargs=plot_3d_kwargs,
+    )
+    line_demos = Demo!.(axs[2:end], (plane.xline[], plane.yline[]); scatter_kwargs, plot_kwargs)
+    return (plane_demo, line_demos...)
+end
+
+#= }}}=#
+
 #= event handlers {{{=#
 
-function on_mouse_button(obj::Demo)
+function on_mouse_button(obj::Demo, dim_fix::Integer=0)
     return function (event)
         if event.button == Mouse.left
-            plt, i = pick(obj.ax)
+            plt, i = pick(obj.fig)
             if event.action == Mouse.press
                 if Keyboard.d in events(obj.fig).keyboardstate
                     # Delete marker
-                    if plt == obj.scatter
-                        deleteat!(obj.object.points[1][], i)
-                        deleteat!(obj.object.points[2][], i)
-                        notify(obj.object.points[1])
+                    if plt === obj.scatter
+                        for j in eachindex(obj.object.points)
+                            deleteat!(obj.object.points[j][], i)
+                        end
+                        notify(obj.object.points[begin])
                         return Consume(true)
                     end
                 elseif Keyboard.a in events(obj.fig).keyboardstate
                     # Add marker
-                    x, y = mouseposition(obj.ax)
-                    push!(obj.object.points[1][], x)
-                    push!(obj.object.points[2][], y)
-                    notify(obj.object.points[1])
-                    return Consume(true)
+                    if mouseover(obj.ax, obj.ax.elements[:background])
+                        pos = mouseposition(obj.ax)
+                        for j in eachindex(obj.object.points)
+                            push!(obj.object.points[j][], pos[j+dim_fix])
+                        end
+                        notify(obj.object.points[begin])
+                        return Consume(true)
+                    end
                 end
                 # start obj.moving
-                if plt == obj.scatter
+                if plt === obj.scatter
                     obj.moving[] = i
                     return Consume(true)
                 end
             elseif event.action == Mouse.release
                 # stop obj.moving
                 if obj.moving[] !== nothing
-                    x, y = mouseposition(obj.ax)
-                    obj.object.points[1][][obj.moving[]] = x
-                    obj.object.points[2][][obj.moving[]] = y
+                    pos = mouseposition(obj.ax)
+                    for j in eachindex(obj.object.points)
+                        obj.object.points[j][][obj.moving[]] = pos[j+dim_fix]
+                    end
                     notify(obj.object.points[begin])
                     obj.moving[] = nothing
                     return Consume(true)
@@ -569,14 +784,15 @@ function on_mouse_button(obj::Demo)
     end
 end
 
-function on_mouse_position(obj::Demo)
+function on_mouse_position(obj::Demo, dim_fix::Integer=0)
     return function (_)
         if obj.moving[] === nothing
             return Consume(false)
         end
-        x, y = mouseposition(obj.ax)
-        obj.object.points[1][][obj.moving[]] = x
-        obj.object.points[2][][obj.moving[]] = y
+        pos = mouseposition(obj.ax)
+        for j in eachindex(obj.object.points)
+            obj.object.points[j][][obj.moving[]] = pos[j+dim_fix]
+        end
         notify(obj.object.points[begin])
         return Consume(true)
     end
