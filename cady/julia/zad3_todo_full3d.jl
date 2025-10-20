@@ -43,14 +43,6 @@ end
 
 #= colors {{{=#
 
-# const DEFAULT_PLOT_KWARGS = Dict(
-#     :linewidth => 4
-# )
-# const DEFAULT_SCATTER_KWARGS = Dict(
-#     :color => :red,
-#     :markersize => 15
-# )
-
 function color_range_observable(points::Observable{<:AbstractVecOrMat})
     range = Observable(eachindex(points[]))
     on(points) do _
@@ -93,7 +85,6 @@ function default_kwargs(
             end
             for (k, v) in pairs(kwargs)
         ))
-        # return kwargs
     end
     if type == :plot
         return Dict(
@@ -121,8 +112,6 @@ function default_kwargs(
         error("No default args defined for: $(type)")
     end
 end
-
-# function default_scatter_color
 
 #= }}}=#
 
@@ -230,12 +219,24 @@ function adjust_knots!(spline::Spline)
     )
 end
 
+function adjust_ts!(
+    ts::AbstractVector{<:Real},
+    accuracy::Integer,
+    knots::AbstractVector{<:Real},
+)
+    resize!(ts, accuracy)
+    ts_size = maximum(knots)
+    step = ts_size / (accuracy - 1)
+    ts .= 0:step:ts_size
+end
+
 function adjust_sizes!(spline::Spline)
     (vec -> resize!(vec[], spline.accuracy[])).(spline.line)
-    resize!(spline.ts[], spline.accuracy[])
-    ts_size = maximum(spline.knots[])
-    step = ts_size / (spline.accuracy[] - 1)
-    spline.ts[] .= 0:step:ts_size
+    adjust_ts!(
+        spline.ts[],
+        spline.accuracy[],
+        spline.knots[],
+    )
 end
 
 #= }}}=#
@@ -279,24 +280,80 @@ function calc_point(
     return calc_point(spline.knots[], spline.degree[], index, x)
 end
 
-function calc_points!(spline::Spline)
-    for dim in eachindex(spline.line)
-        fill!(spline.line[dim][], zero(typeof(spline).parameters[1]))
-        spline.line[dim][][begin] += spline.points[dim][][begin]
-        for i in eachindex(spline.points[begin][])
-            spline.line[dim][] .+=
-                spline.points[dim][][i] *
-                calc_point.((spline,), i, spline.ts[])
-        end
-        # no even slighest clue why this works, but this works
-        adjusted_end = length(spline.knots[]) - spline.degree[] - 1
-        for i in length(spline.points[begin][])+1:adjusted_end
-            spline.line[dim][] .+=
-                spline.points[dim][][end] *
-                calc_point.((spline,), i, spline.ts[])
-        end
+function calc_points!(
+    line::AbstractVecOrMat{<:Real},
+    points::AbstractVecOrMat{<:Real},
+    degree::Integer,
+    knots::AbstractVecOrMat{<:Real},
+    ts::AbstractVecOrMat{<:Real},
+)
+    fill!(
+        line,
+        zero(typeof(line).parameters[1])
+    )
+    line[begin] += points[begin]
+    for i in eachindex(points[begin])
+        line .+=
+            points[i] *
+            calc_point.((knots,), degree, i, ts)
     end
-    notify(spline.line[begin])
+    # no even slighest clue why this works, but this works
+    # this is probably wrong anyway
+    # TODO proper support of duplicated knots
+    # (breaking points in a spline)
+    # adjusted_end = length(knots) - degree - 1
+    # for i in length(points[begin])+1:adjusted_end
+    #     line .+=
+    #         points[end] *
+    #         calc_point.((knots,), degree, i, ts)
+    # end
+end
+
+function calc_points!(
+    line::NTuple{N,Observable{<:AbstractVecOrMat{<:Real}}},
+    points::NTuple{N,Observable{<:AbstractVecOrMat{<:Real}}},
+    degree::Integer,
+    knots::AbstractVecOrMat{<:Real},
+    ts::AbstractVecOrMat{<:Real},
+) where N
+    for dim in eachindex(line)
+        calc_points!(
+            line[dim][],
+            points[dim][],
+            degree,
+            knots,
+            ts,
+        )
+    end
+    notify(line[begin])
+end
+
+function calc_points!(
+    line::NTuple{N,<:AbstractVecOrMat{<:Real}},
+    points::NTuple{N,<:AbstractVecOrMat{<:Real}},
+    degree::Integer,
+    knots::AbstractVecOrMat{<:Real},
+    ts::AbstractVecOrMat{<:Real},
+) where N
+    for dim in eachindex(line)
+        calc_points!(
+            line[dim],
+            points[dim],
+            degree,
+            knots,
+            ts,
+        )
+    end
+end
+
+function calc_points!(spline::Spline)
+    calc_points!(
+        spline.line,
+        spline.points,
+        spline.degree[],
+        spline.knots[],
+        spline.ts[],
+    )
 end
 
 #= }}}=#
@@ -331,14 +388,78 @@ end
 
 #= spline plane {{{=#
 
+#= helpers {{{=#
+
+function get_knots(
+    type::Type,
+    ranges::NTuple{N,Union{AbstractUnitRange,AbstractVector{<:Real}}},
+    degrees::NTuple{N,Integer},
+) where {N}
+    return tuple(
+        (
+            [
+                fill(type(0), degrees[dim]);
+                type.(ranges[dim]);
+                fill(type(maximum(ranges[dim])), degrees[dim])]
+            for dim in 1:N
+        )...
+    )
+end
+
+function get_knots(
+    type::Type,
+    ranges::NTuple{N,AbstractUnitRange} where {N},
+    degree::Integer,
+)
+    return get_knots(
+        type,
+        ranges,
+        tuple((degree for _ in eachindex(ranges))...)
+    )
+end
+
+function get_knots(
+    ranges::NTuple{N,AbstractUnitRange},
+    degrees::NTuple{N,Integer},
+) where {N}
+    return get_knots(Float64, ranges, degrees)
+end
+
+function get_knots(
+    ranges::NTuple{N,AbstractUnitRange},
+    degree::Integer,
+) where {N}
+    return get_knots(Float64, ranges, degree)
+end
+
+# function get_knots!(
+#     knots::AbstractVector{R},
+#     length::R,
+#     degree::Integer,
+# ) where {R<:Real}
+#     @views fill!(knots[begin:begin+degree], 0)
+#     knots[begin+degree+1:end-degree] = 1:length-degree
+#     @views fill!(knots[end-degree+1:end], length - degree)
+# end
+
+#= }}}=#
+
 #= definitions {{{=#
 
 struct SplinePlane{R<:Real} <: AbstractPlane
+    # xline::Observable{Spline{R,1}}
+    # yline::Observable{Spline{R,1}}
+    "heights of plane (can be set by user)"
     coeffs::Observable{<:AbstractMatrix{R}}
+    "size of output (can be set by user)"
     accuracy::NTuple{2,Observable{<:Integer}}
+    "degrees of splines (can be set by user)"
     degree::NTuple{2,Observable{<:Integer}}
-    xline::Spline{R,1}
-    yline::Spline{R,1}
+    "knots for respective dimentions (calculated automatically)"
+    knots::NTuple{2,AbstractVector{R}}
+    "parameter plane to start with (calculated automatically)"
+    ts::NTuple{2,AbstractVector{R}}
+    "calculated heights"
     plane::Observable{<:AbstractMatrix{R}}
 end
 
@@ -347,65 +468,151 @@ function SplinePlane(
     accuracy::NTuple{2,Integer}=DEFAULT_PLANE_ACCURACY,
     degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
 )
-    R = typeof(coeffs).parameters[1]
-    # TODO create splines
+    R = typeof(coeffs[begin]).parameters[1]
     plane = SplinePlane(
-        Observable(coeffs),
-        Observable(accuracy),
-        Observable(degree),
-        splines[1],
-        splines[2],
+        Observable(deepcopy(coeffs)),
+        Observable.(accuracy),
+        Observable.(degree),
+        ([], []),
+        zeros.(R, accuracy),
         Observable(zeros(R, accuracy)),
     )
-    calc_points!(plane)
-    on(plane.coeffs) do _
-        adjust_to_coeffs!(plane)
-        calc_points!(plane)
-    end
-    for dim in 1:2
-        on(plane.accuracy[dim]) do _
-            # TODO
-        end
-        on(plane.degree[dim]) do _
-            # TODO
+    for observable in [
+        plane.coeffs,
+        plane.accuracy,
+        plane.degree,
+    ]
+        on(observable) do _
+            adjust_sizes!(plane)
+            calc_points!(plane)
         end
     end
+    notify(plane.coeffs)
     return plane
 end
 
 function SplinePlane(
-    coeffs::AbstractMatrix{<:Real};
-    degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
+    size::NTuple{2,Integer},
+    type::Type=Float64;
     accuracy::NTuple{2,Integer}=DEFAULT_PLANE_ACCURACY,
+    degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
 )
-    # TODO create splines and pass to constructor above
+    return SplinePlane(
+        fill(type(1), size);
+        accuracy,
+        degree
+    )
 end
+
+# function SplinePlane(
+#     positions::NTuple{2,AbstractVector{R}},
+#     coeffs::Union{AbstractMatrix{R},Nothing}=nothing;
+#     xaccuracy::Integer=DEFAULT_ACCURACY,
+#     xdegree::Integer=DEFAULT_DEGREE,
+#     yaccuracy::Integer=DEFAULT_ACCURACY,
+#     ydegree::Integer=DEFAULT_DEGREE,
+# ) where {R<:Real}
+#     xline = Spline(positions[1]; degree=xdegree, accuracy=xaccuracy)
+#     yline = Spline(positions[2]; degree=ydegree, accuracy=yaccuracy)
+#     return SplinePlane((xline, yline), coeffs)
+# end
+
+# function SplinePlane(
+#     splines::NTuple{2,Spline{<:Real,1}},
+#     coeffs::Union{AbstractMatrix{<:Real},Nothing}=nothing
+# )
+#     plane_dims = (splines[1].accuracy[], splines[2].accuracy[])
+#     R = typeof(splines[begin]).parameters[1]
+#     # TODO checks
+#     if coeffs === nothing
+#         coeffs = fill(R(1), plane_dims)
+#     else
+#         coeffs = R.(coeffs)
+#     end
+#     plane = zeros(R, plane_dims)
+#     plane = SplinePlane(
+#         Observable(splines[1]),
+#         Observable(splines[2]),
+#         Observable(coeffs),
+#         Observable(plane),
+#     )
+#     calc_points!(plane)
+#     on(plane.coeffs) do _
+#         adjust_to_coeffs!(plane)
+#         calc_points!(plane)
+#     end
+#     on(plane.xline[].line[begin]) do _
+#         if size(plane.plane[]) == size(plane.coeffs[])
+#             adjust_sizes!(plane)
+#             calc_points!(plane)
+#         end
+#     end
+#     on(plane.yline[].line[begin]) do _
+#         if size(plane.plane[]) == size(plane.coeffs[])
+#             adjust_sizes!(plane)
+#             calc_points!(plane)
+#         end
+#     end
+#     return plane
+# end
 
 #= }}}=#
 
 #= calculations {{{=#
 
 function adjust_sizes!(plane::SplinePlane)
-    # TODO check
-    # R = typeof(plane).parameters[1]
-    # plane_dims = (plane.xline[].accuracy[], plane.yline[].accuracy[])
-    # if size(plane.plane[]) != plane_dims
-    #     plane.plane[] = zeros(R, plane_dims)
-    # end
-    # if size(plane.coeffs[]) != plane_dims
-    #     coeffs = plane.coeffs[]
-    #     plane.coeffs[] = fill(R(1), plane_dims)
-    #     old_size = size(coeffs)
-    #     new_size = size(plane.coeffs[])
-    #     for i in new_size[2]
-    #         for j in new_size[1]
-    #             old_j = div(j * old_size[1], new_size[1])
-    #             old_i = div(i * old_size[2], new_size[2])
-    #             plane.coeffs[][j, i] = coeffs[old_j, old_i]
-    #         end
-    #     end
-    # end
+    R = typeof(plane).parameters[1]
+    knots_target = size(plane.coeffs[]) .+ plane.degree[] .+ 1
+    if knots_target != size.((x -> x[]).(plane.knots))
+        # TODO knots
+    end
+    for dim in 1:2
+        if size(plane.ts[dim]) != plane.accuracy[][dim]
+            adjust_ts!(
+                plane.ts[dim],
+                plane.accuracy[][dim],
+                plane.knots[dim],
+            )
+        end
+    end
+    if size(plane.plane[]) != plane.accuracy[]
+        plane.plane[] = Matrix{R}(undef, plane.accuracy[])
+    end
 end
+
+# function adjust_knots!(spline::Spline)
+#     R = typeof(spline).parameters[1]
+#     resize!(
+#         spline.knots[],
+#         length(spline.points[begin][]) + spline.degree[] + 1
+#     )
+#     get_knots!(
+#         spline.knots[],
+#         R(length(spline.points[begin][])),
+#         spline.degree[]
+#     )
+# end
+
+# function adjust_sizes!(plane::SplinePlane)
+#     R = typeof(plane).parameters[1]
+#     plane_dims = (plane.xline[].accuracy[], plane.yline[].accuracy[])
+#     if size(plane.plane[]) != plane_dims
+#         plane.plane[] = zeros(R, plane_dims)
+#     end
+#     if size(plane.coeffs[]) != plane_dims
+#         coeffs = plane.coeffs[]
+#         plane.coeffs[] = fill(R(1), plane_dims)
+#         old_size = size(coeffs)
+#         new_size = size(plane.coeffs[])
+#         for i in new_size[2]
+#             for j in new_size[1]
+#                 old_j = div(j * old_size[1], new_size[1])
+#                 old_i = div(i * old_size[2], new_size[2])
+#                 plane.coeffs[][j, i] = coeffs[old_j, old_i]
+#             end
+#         end
+#     end
+# end
 
 # function adjust_to_coeffs!(plane::SplinePlane)
 #     if (plane.xline[].accuracy[], plane.xline[].accuracy[]) == size(plane.coeffs[])
@@ -415,17 +622,16 @@ end
 #     plane.plane[] = zeros(typeof(plane).parameters[1], size(plane.coeffs[]))
 # end
 
-function calc_points!(plane::SplinePlane{R}) where {R<:Real}
-    # TODO
-    # yline = plane.yline[].line[begin][]
-    # @views for y in eachindex(yline)
-    #     plane.plane[][:, y] .=
-    #         yline[y] .*
-    #         plane.xline[].line[begin][][:] .*
-    #         plane.coeffs[][:, y]
-    # end
-    notify(plane.plane)
-end
+# function calc_points!(plane::SplinePlane{R}) where {R<:Real}
+#     yline = plane.yline[].line[begin][]
+#     @views for y in eachindex(yline)
+#         plane.plane[][:, y] .=
+#             yline[y] .*
+#             plane.xline[].line[begin][][:] .*
+#             plane.coeffs[][:, y]
+#     end
+#     notify(plane.plane)
+# end
 
 #= }}}=#
 
@@ -542,7 +748,7 @@ end
 
 #= }}}=#
 
-#= static demos {{{=#
+#= static demo {{{=#
 
 function StaticDemo!(
     ax::Axis,
@@ -611,7 +817,7 @@ function StaticDemo!(
         plane,
         ax.parent,
         ax,
-        # # plt,
+        # plt,
         sct,
         nothing,
         moving,
@@ -652,77 +858,43 @@ end
 
 #= }}}=#
 
-#= other demos {{{=#
+#= multi demos {{{=#
 
-function MovingPlaneDemo(
-    splines::NTuple{2,Spline},
-    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-)
-    return MovingPlaneDemo(
-        SplinePlane(splines);
-        fig_kwargs,
-        scatter_kwargs,
-        plot_kwargs,
-    )
-end
+# TODO
+# function MultiDemo(
+#     splines::NTuple{2,Spline},
+#     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+#     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+#     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+# )
+#     return MultiDemo(
+#         SplinePlane(splines);
+#         fig_kwargs,
+#         scatter_kwargs,
+#         plot_kwargs,
+#     )
+# end
 
-function MovingPlaneDemo(
-    plane::AbstractPlane;
-    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    scatter_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-)
-    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    axs = (Axis3(fig[1:2, 1:2]), Axis(fig[1, 3]), Axis(fig[2, 3]))
-    plane_demo = StaticDemo!(
-        axs[1],
-        plane;
-        scatter_kwargs=scatter_3d_kwargs,
-        plot_kwargs=plot_3d_kwargs,
-    )
-    line_demos = Demo!.(axs[2:end], (plane.xline[], plane.yline[]); scatter_kwargs, plot_kwargs)
-    return (plane_demo, line_demos...)
-end
-
-function EditablePlaneDemo(
-    plane::AbstractPlane;
-    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-)
-    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    ax = Axis3(fig[1, 1])
-    # TODO demo with modifiable points in 3d
-    # TODO may be better to have points in separate plot
-    # axs = (Axis3(fig[1, 1]), Axis3(fig[1, 2]))
-    # plane_demo = StaticDemo!(
-    #     axs[1],
-    #     plane;
-    #     scatter_kwargs,
-    #     plot_kwargs,
-    # )
-    # return (plane_demo, )
-end
-
-function EditablePlaneDemo(
-    coeffs::AbstractMatrix{<:Real};
-    degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
-    accuracy::NTuple{2,Integer}=DEFAULT_PLANE_ACCURACY,
-    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-)
-    return EditablePlaneDemo(
-        SplinePlane(coeffs; degree, accuracy);
-        fig_kwargs,
-        scatter_kwargs,
-        plot_kwargs,
-    )
-end
+# TODO
+# function MultiDemo(
+#     plane::AbstractPlane;
+#     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+#     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+#     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+#     scatter_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+#     plot_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+# )
+#     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
+#     axs = (Axis3(fig[1:2, 1:2]), Axis(fig[1, 3]), Axis(fig[2, 3]))
+#     plane_demo = StaticDemo!(
+#         axs[1],
+#         plane;
+#         scatter_kwargs=scatter_3d_kwargs,
+#         plot_kwargs=plot_3d_kwargs,
+#     )
+#     line_demos = Demo!.(axs[2:end], (plane.xline[], plane.yline[]); scatter_kwargs, plot_kwargs)
+#     return (plane_demo, line_demos...)
+# end
 
 #= }}}=#
 
