@@ -301,6 +301,39 @@ end
 
 #= }}}=#
 
+#= operations {{{=#
+
+function rotate(
+    spline::Spline{<:Real,2},
+    angle::Real
+)
+    oldx, oldy = deepcopy.((x -> x[]).(spline.points[1:2]))
+    spline.points[1][] .= oldx .* cos.(angle) - oldy .* sin.(angle)
+    spline.points[2][] .= oldx .* sin.(angle) + oldy .* cos.(angle)
+    notify(spline.points[begin])
+end
+
+# TODO proper 3d rotations
+
+function rotate_around_z(
+    spline::Spline{<:Real,3},
+    ax::NTuple{2,<:Real},
+    angle::Real
+)
+    for dim in [1, 2]
+        spline.points[dim][] .-= ax[dim]
+    end
+    oldx, oldy = deepcopy.((x -> x[]).(spline.points[1:2]))
+    spline.points[1][] .= oldx .* cos.(angle) - oldy .* sin.(angle)
+    spline.points[2][] .= oldx .* sin.(angle) + oldy .* cos.(angle)
+    for dim in [1, 2]
+        spline.points[dim][] .+= ax[dim]
+    end
+    notify(spline.points[begin])
+end
+
+#= }}}=#
+
 #= drawings {{{=#
 
 function draw_splines(
@@ -334,11 +367,17 @@ end
 #= definitions {{{=#
 
 struct SplinePlane{R<:Real} <: AbstractPlane
+    "heights of plane (coefficients of a matrix; can be set by user)"
     coeffs::Observable{<:AbstractMatrix{R}}
+    "size of output plane (can be set by user)"
     accuracy::NTuple{2,Observable{<:Integer}}
+    "degrees of respective splines (can be set by user)"
     degree::NTuple{2,Observable{<:Integer}}
+    "spline in x dimention (helper for calculations)"
     xline::Spline{R,1}
+    "spline in y dimention (helper for calculations)"
     yline::Spline{R,1}
+    "calculated plane"
     plane::Observable{<:AbstractMatrix{R}}
 end
 
@@ -348,11 +387,15 @@ function SplinePlane(
     degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
 )
     R = typeof(coeffs).parameters[1]
-    # TODO create splines
+    initial_points = ones.(R, size(coeffs))
+    splines = tuple((
+        Spline((initial_points[dim],); degree=degree[dim], accuracy=accuracy[dim])
+        for dim in 1:2
+    )...)
     plane = SplinePlane(
         Observable(coeffs),
-        Observable(accuracy),
-        Observable(degree),
+        Observable.(accuracy),
+        Observable.(degree),
         splines[1],
         splines[2],
         Observable(zeros(R, accuracy)),
@@ -371,14 +414,6 @@ function SplinePlane(
         end
     end
     return plane
-end
-
-function SplinePlane(
-    coeffs::AbstractMatrix{<:Real};
-    degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
-    accuracy::NTuple{2,Integer}=DEFAULT_PLANE_ACCURACY,
-)
-    # TODO create splines and pass to constructor above
 end
 
 #= }}}=#
@@ -426,6 +461,12 @@ function calc_points!(plane::SplinePlane{R}) where {R<:Real}
     # end
     notify(plane.plane)
 end
+
+#= }}}=#
+
+#= operations {{{=#
+
+# TODO rotations
 
 #= }}}=#
 
