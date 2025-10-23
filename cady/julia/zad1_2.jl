@@ -218,7 +218,8 @@ function calc_points!(spline::Spline)
                 spline.points[dim][][i] *
                 calc_point.((spline,), i, spline.ts)
         end
-        # no even slighest clue why this works, but this works
+        # TODO proper knots handling
+        # currently there is not proper support for duplicated knots
         adjusted_end = length(spline.knots[]) - spline.degree[] - 1
         for i in length(spline.points[begin][])+1:adjusted_end
             spline.line[dim][] .+=

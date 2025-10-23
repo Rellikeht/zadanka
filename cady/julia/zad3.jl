@@ -46,9 +46,21 @@ function Base.abs(color::AbstractRGB)
     sqrt(sum((color.r, color.g, color.b) .^ 2))
 end
 
+function get_value(o::Observable{T} where {T})
+    return o[]
+end
+
+function get_value(r::Ref{T} where {T})
+    return r[]
+end
+
+function get_value(v)
+    return v
+end
+
 #= }}}=#
 
-#= colors {{{=#
+#= kwargs and colors {{{=#
 
 # const DEFAULT_PLOT_KWARGS = Dict(
 #     :linewidth => 4
@@ -112,7 +124,8 @@ function default_kwargs(
         return Dict(
             :colormap => :viridis,
             :color => range,
-            :markersize => 15
+            :markersize => 15,
+            :strokewidth => 0,
         )
     elseif type == :plot_3d
         return Dict(
@@ -122,7 +135,16 @@ function default_kwargs(
         return Dict(
             :colormap => :viridis,
             :color => range,
-            :markersize => 10
+            :markersize => 10,
+            :strokewidth => 0,
+        )
+    elseif type == :contour_3d
+        levels = 20
+        return Dict(
+            :colormap => :viridis,
+            :linewidth => 3,
+            # :color => 1:levels,
+            :levels => levels,
         )
     else
         error("No default args defined for: $(type)")
@@ -252,12 +274,34 @@ function adjust_knots!(spline::Spline)
     )
 end
 
-function adjust_sizes!(spline::Spline)
+function adjust_sizes!(
+    spline::Spline
+)
     (vec -> resize!(vec[], spline.accuracy[])).(spline.line)
-    resize!(spline.ts[], spline.accuracy[])
-    ts_size = maximum(spline.knots[])
-    step = ts_size / (spline.accuracy[] - 1)
-    spline.ts[] .= 0:step:ts_size
+    adjust_ts!(spline.ts, spline.accuracy, spline.knots)
+end
+
+function adjust_ts!(
+    ts::AbstractVector{<:Real},
+    accuracy::Integer,
+    knots::AbstractVector{<:Real},
+)
+    resize!(ts, accuracy)
+    ts_size = maximum(knots)
+    step = ts_size / (accuracy - 1)
+    ts .= 0:step:ts_size
+end
+
+function adjust_ts!(
+    ts::Union{Observable{<:AbstractVector{<:Real}},AbstractVector{<:Real}},
+    accuracy::Union{Integer,Observable{<:Integer}},
+    knots::Union{Observable{<:AbstractVector{<:Real}},AbstractVector{<:Real}},
+)
+    adjust_ts!(
+        get_value(ts),
+        get_value(accuracy),
+        get_value(knots),
+    )
 end
 
 #= }}}=#
@@ -310,7 +354,8 @@ function calc_points!(spline::Spline)
                 spline.points[dim][][i] *
                 calc_point.((spline,), i, spline.ts[])
         end
-        # no even slighest clue why this works, but this works
+        # TODO proper knots handling
+        # currently there is not proper support for duplicated knots
         adjusted_end = length(spline.knots[]) - spline.degree[] - 1
         for i in length(spline.points[begin][])+1:adjusted_end
             spline.line[dim][] .+=
@@ -392,15 +437,19 @@ struct SplinePlane{R<:Real} <: AbstractPlane
     "heights of plane (coefficients of a matrix; can be set by user)"
     coeffs::Observable{<:AbstractMatrix{R}}
     "size of output plane (can be set by user)"
-    accuracy::NTuple{2,Observable{<:Integer}}
+    accuracy::Observable{<:NTuple{2,Integer}}
     "degrees of respective splines (can be set by user)"
-    degree::NTuple{2,Observable{<:Integer}}
-    "spline in x dimention (helper for calculations)"
-    xspline::Spline{R,1}
-    "splines in y dimention (helper for calculations)"
-    ysplines::AbstractVector{Spline{R,1}}
-    "temporary array"
-    temp::Ref{<:AbstractMatrix{R}}
+    degree::Observable{<:NTuple{2,Integer}}
+    ""
+    knots::NTuple{2,AbstractVector{R}}
+    ""
+    ts::NTuple{2,Observable{<:AbstractVector{R}}}
+    "temporary spline in x"
+    xspline::AbstractVector{R}
+    "temporary splines in y"
+    ysplines::Ref{<:AbstractMatrix{R}}
+    "temporary array for plane"
+    temp_plane::Ref{<:AbstractMatrix{R}}
     "calculated plane"
     plane::Observable{<:AbstractMatrix{R}}
 end
@@ -411,39 +460,25 @@ function SplinePlane(
     degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
 )
     R = typeof(coeffs).parameters[1]
-    sy, sx = size(coeffs)
-    xspline = Spline(
-        Vector{R}(undef, sx);
-        degree=degree[2],
-        accuracy=accuracy[2],
-        lazy=true,
-    )
-    ysplines = [
-        Spline(
-            Vector{R}(undef, sy);
-            degree=degree[1],
-            accuracy=accuracy[1],
-            lazy=true,
-        ) for _ in 1:sx
-    ]
     plane = SplinePlane(
         Observable(coeffs),
-        Observable.(accuracy),
-        Observable.(degree),
-        xspline,
-        ysplines,
+        Observable(accuracy),
+        Observable(degree),
+        tuple((Vector{R}(undef, 0) for _ in 1:2)...),
+        tuple((Observable(Vector{R}(undef, 0)) for _ in 1:2)...),
+        Vector{R}(undef, accuracy[2]),
+        Ref(Matrix{R}(undef, accuracy)),
         Ref(Matrix{R}(undef, accuracy)),
         Observable(Matrix{R}(undef, accuracy)),
     )
     calc_points!(plane)
-    on(plane.coeffs) do _
-        calc_points!(plane)
-    end
-    for dim in 1:2
-        on(plane.accuracy[dim]) do _
-            calc_points!(plane)
-        end
-        on(plane.degree[dim]) do _
+    for obs in [
+        plane.coeffs,
+        plane.accuracy,
+        plane.degree,
+    ]
+        on(obs) do _
+            # @time calc_points!(plane)
             calc_points!(plane)
         end
     end
@@ -455,48 +490,55 @@ end
 #= calculations {{{=#
 
 function calc_points!(plane::SplinePlane{R}) where {R<:Real}
-    yacc, xacc = (x -> x[]).(plane.accuracy)
-    ydeg, xdeg = (x -> x[]).(plane.degree)
-    plane.xspline.accuracy[] = xacc
-    plane.xspline.degree[] = xdeg
+    yacc, xacc = plane.accuracy[]
+    ydeg, xdeg = plane.degree[]
     sy, sx = size(plane.coeffs[])
-    resize!(plane.xspline.points[begin][], sx)
-    xsize = length(plane.ysplines)
-    resize!(plane.ysplines, sx)
-    if xsize < sx
-        for i in xsize:sx
-            plane.ysplines[i] = Spline(
-                Vector{R}(undef, sy);
-                degree=ydeg,
-                accuracy=yacc,
-                lazy=true,
-            )
-        end
-    end
 
-    for (x, spline) in enumerate(plane.ysplines)
-        spline.accuracy[], spline.degree[] = yacc, ydeg
-        resize!(spline.points[begin][], sy)
-        spline.points[begin][] .= plane.coeffs[][:, x]
-        notify(spline.points[begin])
-    end
-
+    resize!.(plane.knots, size(plane.coeffs[]) .+ plane.degree[] .+ 1)
+    get_knots!.(plane.knots, R.(size(plane.coeffs[])), plane.degree[])
+    adjust_ts!.(plane.ts, plane.accuracy[], plane.knots)
     if size(plane.plane[]) != (yacc, xacc)
         plane.plane[] = zeros((yacc, xacc))
     else
         fill!(plane.plane[], zero(R))
     end
-    if size(plane.temp[]) != size(plane.plane[])
-        plane.temp[] = Matrix{R}(undef, size(plane.plane[]))
+    resize!(plane.xspline, xacc)
+    for collection in [
+        plane.ysplines,
+        plane.temp_plane,
+        plane.plane,
+    ]
+        if size(collection[]) != (yacc, xacc)
+            collection[] = Matrix{R}(undef, (yacc, xacc))
+        end
     end
 
-    for y in 1:sy
-        plane.xspline.points[begin][] .= plane.coeffs[][y, :]
-        notify(plane.xspline.points[begin])
-        for x in 1:sx
-            transpose(plane.temp[]) .= plane.xspline.line[begin][]
-            plane.temp[] .*= plane.ysplines[x].line[begin][]
-            plane.plane[] .+= plane.temp[]
+    # println(plane.knots)
+    coeffs, ysplines = plane.coeffs[], plane.ysplines[]
+    temp_plane, output = plane.temp_plane[], plane.plane[]
+    ts = (o -> o[]).(plane.ts)
+    @inbounds @views for x in 1:sx
+        ysplines[:, x] .= calc_point.((plane.knots[1],), ydeg, x, ts[1])
+    end
+    @inbounds for y in 1:sy
+        plane.xspline .= calc_point.((plane.knots[2],), xdeg, y, ts[2])
+        if y == 1
+            plane.xspline[begin] = 1
+        end
+        @views for x in 1:sx
+            transpose(temp_plane) .= plane.xspline
+            if x == 1
+                ysplines[begin, x] = 1
+            end
+            temp_plane .*= ysplines[:, x]
+            temp_plane .*= coeffs[y, x]
+            if x == 1
+                ysplines[begin, x] = 0
+            end
+            output .+= temp_plane
+        end
+        if y == 1
+            plane.xspline[begin] = 0
         end
     end
     notify(plane.plane)
@@ -673,27 +715,32 @@ function StaticDemo!(
 
     # plt = lines!(
     #     ax,
-    #     plane.xline[].ts,
-    #     plane.yline[].ts,
+    #     plane.ts...,
     #     plane.plane;
-    #     default_kwargs(:plot_3d, plot_kwargs, plane.xline[].ts)...
+    #     default_kwargs(:plot_3d, plot_kwargs, plane.ts[begin])...
     # )
 
-    sct = scatter!(
+    plt = contour3d!(
         ax,
-        plane.xline[].ts,
-        plane.yline[].ts,
+        plane.ts...,
         plane.plane;
-        (default_kwargs(:scatter_3d, scatter_kwargs, plane.xline[].ts))...
+        default_kwargs(:contour_3d, plot_kwargs, plane.ts[begin])...
     )
+
+    # sct = scatter!(
+    #     ax,
+    #     plane.ts...,
+    #     plane.plane;
+    #     (default_kwargs(:scatter_3d, scatter_kwargs, plane.ts[begin]))...
+    # )
 
     moving = Observable(nothing)
     object = Demo(
         plane,
         ax.parent,
         ax,
-        # # plt,
-        sct,
+        plt,
+        # sct,
         nothing,
         moving,
     )
