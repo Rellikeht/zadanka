@@ -1,7 +1,7 @@
 {
   inputs = {
     # nixpkgs.url = "github:NixOS/nixpkgs";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -17,11 +17,6 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             octaveFull
-
-            # libglvnd
-            # qt6.qtdeclarative
-            # qt6.qtbase
-            # qt6.qttools
           ];
           phases = [];
           shellHook = '''';
