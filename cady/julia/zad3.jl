@@ -1,7 +1,10 @@
 using GLMakie
 using FileIO
 using Observables
+using Colors
+
 using Makie: AbstractAxis
+import Base: abs
 
 const DEFAULT_INDICATOR = (default=true,)
 const DEFAULT_ACCURACY = 200
@@ -37,6 +40,10 @@ function tuple_of_vectors(
         end
     end
     return new_data
+end
+
+function Base.abs(color::AbstractRGB)
+    sqrt(sum((color.r, color.g, color.b) .^ 2))
 end
 
 #= }}}=#
@@ -144,12 +151,14 @@ function Spline(
     knots::Union{Nothing,AbstractVector{<:Real}}=nothing,
     accuracy::Integer=DEFAULT_ACCURACY,
     degree::Integer=DEFAULT_DEGREE,
+    lazy::Bool=false,
 )
     return Spline(
         tuple_of_vectors(positions);
         knots,
         accuracy,
         degree,
+        lazy,
     )
 end
 
@@ -158,6 +167,7 @@ function Spline(
     knots::Union{Nothing,AbstractVector{<:Real}}=nothing,
     accuracy::Integer=DEFAULT_ACCURACY,
     degree::Integer=DEFAULT_DEGREE,
+    lazy::Bool=false,
 )
     R = typeof(positions).parameters[1].parameters[1]
     if knots === nothing
@@ -174,13 +184,15 @@ function Spline(
         )...),
         Observable(Vector{R}(undef, accuracy)),
     )
-    on(spline.accuracy) do _
-        adjust_sizes!(spline)
-        calc_points!(spline)
-    end
-    on(spline.degree) do _
-        adjust_knots!(spline)
-        calc_points!(spline)
+    if !lazy
+        on(spline.accuracy) do _
+            adjust_sizes!(spline)
+            calc_points!(spline)
+        end
+        on(spline.degree) do _
+            adjust_knots!(spline)
+            calc_points!(spline)
+        end
     end
     # TODO changing (and checking) knots
     on(_ -> calc_points!(spline), spline.knots)
@@ -198,6 +210,16 @@ function Spline(
     adjust_sizes!(spline)
     calc_points!(spline)
     return spline
+end
+
+function Spline(
+    positions::AbstractVector{<:Real};
+    knots::Union{Nothing,AbstractVector{<:Real}}=nothing,
+    accuracy::Integer=DEFAULT_ACCURACY,
+    degree::Integer=DEFAULT_DEGREE,
+    lazy::Bool=false,
+)
+    return Spline((positions,); knots, accuracy, degree, lazy)
 end
 
 function get_knots(
@@ -374,9 +396,11 @@ struct SplinePlane{R<:Real} <: AbstractPlane
     "degrees of respective splines (can be set by user)"
     degree::NTuple{2,Observable{<:Integer}}
     "spline in x dimention (helper for calculations)"
-    xline::Spline{R,1}
-    "spline in y dimention (helper for calculations)"
-    yline::Spline{R,1}
+    xspline::Spline{R,1}
+    "splines in y dimention (helper for calculations)"
+    ysplines::AbstractVector{Spline{R,1}}
+    "temporary array"
+    temp::Ref{<:AbstractMatrix{R}}
     "calculated plane"
     plane::Observable{<:AbstractMatrix{R}}
 end
@@ -387,30 +411,40 @@ function SplinePlane(
     degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
 )
     R = typeof(coeffs).parameters[1]
-    initial_points = ones.(R, size(coeffs))
-    splines = tuple((
-        Spline((initial_points[dim],); degree=degree[dim], accuracy=accuracy[dim])
-        for dim in 1:2
-    )...)
+    sy, sx = size(coeffs)
+    xspline = Spline(
+        Vector{R}(undef, sx);
+        degree=degree[2],
+        accuracy=accuracy[2],
+        lazy=true,
+    )
+    ysplines = [
+        Spline(
+            Vector{R}(undef, sy);
+            degree=degree[1],
+            accuracy=accuracy[1],
+            lazy=true,
+        ) for _ in 1:sx
+    ]
     plane = SplinePlane(
         Observable(coeffs),
         Observable.(accuracy),
         Observable.(degree),
-        splines[1],
-        splines[2],
-        Observable(zeros(R, accuracy)),
+        xspline,
+        ysplines,
+        Ref(Matrix{R}(undef, accuracy)),
+        Observable(Matrix{R}(undef, accuracy)),
     )
     calc_points!(plane)
     on(plane.coeffs) do _
-        adjust_to_coeffs!(plane)
         calc_points!(plane)
     end
     for dim in 1:2
         on(plane.accuracy[dim]) do _
-            # TODO
+            calc_points!(plane)
         end
         on(plane.degree[dim]) do _
-            # TODO
+            calc_points!(plane)
         end
     end
     return plane
@@ -420,45 +454,51 @@ end
 
 #= calculations {{{=#
 
-function adjust_sizes!(plane::SplinePlane)
-    # TODO check
-    # R = typeof(plane).parameters[1]
-    # plane_dims = (plane.xline[].accuracy[], plane.yline[].accuracy[])
-    # if size(plane.plane[]) != plane_dims
-    #     plane.plane[] = zeros(R, plane_dims)
-    # end
-    # if size(plane.coeffs[]) != plane_dims
-    #     coeffs = plane.coeffs[]
-    #     plane.coeffs[] = fill(R(1), plane_dims)
-    #     old_size = size(coeffs)
-    #     new_size = size(plane.coeffs[])
-    #     for i in new_size[2]
-    #         for j in new_size[1]
-    #             old_j = div(j * old_size[1], new_size[1])
-    #             old_i = div(i * old_size[2], new_size[2])
-    #             plane.coeffs[][j, i] = coeffs[old_j, old_i]
-    #         end
-    #     end
-    # end
-end
-
-# function adjust_to_coeffs!(plane::SplinePlane)
-#     if (plane.xline[].accuracy[], plane.xline[].accuracy[]) == size(plane.coeffs[])
-#         return
-#     end
-#     plane.xline[].accuracy[], plane.yline[].accuracy[] = size(plane.coeffs[])
-#     plane.plane[] = zeros(typeof(plane).parameters[1], size(plane.coeffs[]))
-# end
-
 function calc_points!(plane::SplinePlane{R}) where {R<:Real}
-    # TODO
-    # yline = plane.yline[].line[begin][]
-    # @views for y in eachindex(yline)
-    #     plane.plane[][:, y] .=
-    #         yline[y] .*
-    #         plane.xline[].line[begin][][:] .*
-    #         plane.coeffs[][:, y]
-    # end
+    yacc, xacc = (x -> x[]).(plane.accuracy)
+    ydeg, xdeg = (x -> x[]).(plane.degree)
+    plane.xspline.accuracy[] = xacc
+    plane.xspline.degree[] = xdeg
+    sy, sx = size(plane.coeffs[])
+    resize!(plane.xspline.points[begin][], sx)
+    xsize = length(plane.ysplines)
+    resize!(plane.ysplines, sx)
+    if xsize < sx
+        for i in xsize:sx
+            plane.ysplines[i] = Spline(
+                Vector{R}(undef, sy);
+                degree=ydeg,
+                accuracy=yacc,
+                lazy=true,
+            )
+        end
+    end
+
+    for (x, spline) in enumerate(plane.ysplines)
+        spline.accuracy[], spline.degree[] = yacc, ydeg
+        resize!(spline.points[begin][], sy)
+        spline.points[begin][] .= plane.coeffs[][:, x]
+        notify(spline.points[begin])
+    end
+
+    if size(plane.plane[]) != (yacc, xacc)
+        plane.plane[] = zeros((yacc, xacc))
+    else
+        fill!(plane.plane[], zero(R))
+    end
+    if size(plane.temp[]) != size(plane.plane[])
+        plane.temp[] = Matrix{R}(undef, size(plane.plane[]))
+    end
+
+    for y in 1:sy
+        plane.xspline.points[begin][] .= plane.coeffs[][y, :]
+        notify(plane.xspline.points[begin])
+        for x in 1:sx
+            transpose(plane.temp[]) .= plane.xspline.line[begin][]
+            plane.temp[] .*= plane.ysplines[x].line[begin][]
+            plane.plane[] .+= plane.temp[]
+        end
+    end
     notify(plane.plane)
 end
 
