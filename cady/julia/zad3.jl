@@ -249,13 +249,13 @@ function Spline(
 end
 
 function Spline(
-    positions::AbstractVector{<:Real};
+    positions::AbstractVector{<:Real}...;
     knots::Union{Nothing,AbstractVector{<:Real}}=nothing,
     accuracy::Integer=DEFAULT_ACCURACY,
     degree::Integer=DEFAULT_DEGREE,
     lazy::Bool=false,
 )
-    return Spline((positions,); knots, accuracy, degree, lazy)
+    return Spline(positions; knots, accuracy, degree, lazy)
 end
 
 function Spline(
@@ -393,22 +393,29 @@ end
 
 #= operations {{{=#
 
-function rotate(
+function rotate!(
     spline::Spline{<:Real,2},
-    angle::Real
+    angle::Real,
+    around::NTuple{2,<:Real}=(0.0, 0.0),
 )
+    for dim in [1, 2]
+        spline.points[dim][] .-= around[dim]
+    end
     oldx, oldy = deepcopy.((x -> x[]).(spline.points[1:2]))
     spline.points[1][] .= oldx .* cos.(angle) - oldy .* sin.(angle)
     spline.points[2][] .= oldx .* sin.(angle) + oldy .* cos.(angle)
+    for dim in [1, 2]
+        spline.points[dim][] .-= around[dim]
+    end
     notify(spline.points[begin])
 end
 
 # TODO proper 3d rotations
 
-function rotate_around_z(
+function rotate_around_z!(
     spline::Spline{<:Real,3},
+    angle::Real,
     ax::NTuple{2,<:Real},
-    angle::Real
 )
     for dim in [1, 2]
         spline.points[dim][] .-= ax[dim]
@@ -593,7 +600,7 @@ end
 
 #= constructors {{{=#
 
-function resister_actions!(demo::Demo)
+function register_actions!(demo::Demo)
     deregister_interaction!(demo.ax, :rectanglezoom)
     on(
         on_mouse_button(demo),
@@ -731,8 +738,8 @@ end
 
 function add_plots!(
     ax::Union{Axis,Axis3},
-    lines::NTuple{N,Observable{<:AbstractVector{<:Real}}},
-    points::NTuple{N,Observable{<:AbstractVector{<:Real}}};
+    lines::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N,
+    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N;
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
@@ -776,36 +783,36 @@ function StaticDemo!(
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_type::Symbol=:contour
 )
-
-    # TODO plot type
-    # plt = lines!(
-    #     ax,
-    #     plane.ts...,
-    #     plane.plane;
-    #     default_kwargs(:plot_3d, plot_kwargs, plane.ts[begin])...
-    # )
-
-    plt = contour3d!(
-        ax,
-        plane.ts...,
-        plane.plane;
-        default_kwargs(:contour_3d, plot_kwargs, plane.ts[begin])...
-    )
-
-    # sct = scatter!(
-    #     ax,
-    #     plane.ts...,
-    #     plane.plane;
-    #     (default_kwargs(:scatter_3d, scatter_kwargs, plane.ts[begin]))...
-    # )
-
+    if plot_type == :lines
+        plt = lines!(
+            ax,
+            plane.ts...,
+            plane.plane;
+            default_kwargs(:plot_3d, plot_kwargs, plane.ts[begin])...
+        )
+    elseif plot_type == :contour
+        plt = contour3d!(
+            ax,
+            plane.ts...,
+            plane.plane;
+            default_kwargs(:contour_3d, plot_kwargs, plane.ts[begin])...
+        )
+    elseif plot_type == :scatter
+        plt = scatter!(
+            ax,
+            plane.ts...,
+            plane.plane;
+            (default_kwargs(:scatter_3d, plot_kwargs, plane.ts[begin]))...
+        )
+    else
+        error("Unsupported plot type: $(plot_type)")
+    end
     moving = Observable(nothing)
     object = Demo(
         plane,
         ax.parent,
         ax,
         plt,
-        # sct,
         nothing,
         moving,
     )
@@ -819,7 +826,7 @@ function StaticDemo(
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     return StaticDemo!(
-        fig_and_ax(fig_kwargs, length(line.points)),
+        fig_and_ax(fig_kwargs, length(line.points))[2],
         line;
         scatter_kwargs,
         plot_kwargs
@@ -829,16 +836,64 @@ end
 function StaticDemo(
     plane::AbstractPlane;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_type::Symbol=:contour,
 )
     return StaticDemo!(
-        fig_and_ax(fig_kwargs, 3),
-        ax,
+        fig_and_ax(fig_kwargs, 3)[2],
         plane;
-        scatter_kwargs,
-        plot_kwargs
+        plot_kwargs,
+        plot_type,
     )
+end
+
+function StaticDemo!(
+    ax::Axis3,
+    line::Spline{<:Real,2};
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plane_dim::Symbol=:z,
+    move::Real=0.0,
+)
+    lines, points = (), ()
+    R = typeof(line).parameters[1]
+    zero_points = Observable(fill(R(move), length(line.points[begin][])))
+    zero_line = Observable(fill(R(move), length(line.line[begin][])))
+    on(line.points[begin]) do _
+        resize!(zero_points, length(line.points[begin][]))
+        fill!(zero_points, R(move))
+    end
+    on(line.line[begin]) do _
+        resize!(zero_line, length(line.line[begin][]))
+        fill!(zero_line, R(move))
+    end
+
+    if plane_dim == :x
+        lines = (zero_line, line.line[1], line.line[2])
+        points = (zero_points, line.points[1], line.points[2])
+    elseif plane_dim == :y
+        lines = (line.line[1], zero_line, line.line[2])
+        points = (line.points[1], zero_points, line.points[2])
+    elseif plane_dim == :z
+        lines = (line.line[1], line.line[2], zero_line)
+        points = (line.points[1], line.points[2], zero_points)
+    else
+        error("Invalid dimention: $(plane_dim)")
+    end
+    add_plots!(ax, lines, points; scatter_kwargs, plot_kwargs)
+    return ax.parent
+end
+
+function StaticDemo!(
+    demo::Demo,
+    line::Spline{<:Real,2};
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plane_dim::Symbol=:z,
+    move::Real=0.0,
+)
+    StaticDemo!(demo.ax, line; scatter_kwargs, plot_kwargs, plane_dim, move)
+    return demo
 end
 
 #= }}}=#
