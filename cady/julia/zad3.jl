@@ -49,11 +49,11 @@ function Base.abs(color::AbstractRGB)
     sqrt(sum((color.r, color.g, color.b) .^ 2))
 end
 
-function get_value(o::Observable{T} where {T})
+function get_value(o::Observable)
     return o[]
 end
 
-function get_value(r::Ref{T} where {T})
+function get_value(r::Ref)
     return r[]
 end
 
@@ -162,7 +162,7 @@ end
 
 function add_plots!(
     ax::Union{Axis,Axis3},
-    line::AbstractLine{<:Real,N} where N,
+    line::AbstractLine{<:Real,N} where {N},
     dims::Union{NTuple{2,Integer},Nothing}=nothing;
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
@@ -364,9 +364,9 @@ function Spline(
 end
 
 function get_knots(
-    xs::AbstractVector{R},
+    xs::AbstractVector{<:Real},
     degree::Integer,
-) where {R<:Real}
+)
     return [fill(xs[begin], degree); xs; fill(xs[end], degree)]
 end
 
@@ -442,14 +442,14 @@ function calc_point(
     tmp = knots[index+degree] - knots[index]
     left = calc_point(knots, degree - 1, index, x)
     left = if tmp == 0
-        left
+        0 # left ?
     else
         left * (x - knots[index]) / tmp
     end
     tmp = knots[index+degree+1] - knots[index+1]
     right = calc_point(knots, degree - 1, index + 1, x)
     right = if tmp == 0
-        right
+        0 # right ?
     else
         right * (knots[index+degree+1] - x) / tmp
     end
@@ -470,14 +470,15 @@ function calc_points!(spline::Spline)
         fill!(line, zero(typeof(spline).parameters[1]))
         line[begin] += points[begin]
         for i in eachindex(points)
-            line .+= points[i] * calc_point.((spline,), i, ts)
+            line .+=
+                points[i] * calc_point.((spline.knots[],), spline.degree[], i, ts)
         end
         # TODO proper knots handling
         # currently there is not proper support for duplicated knots
-        adjusted_end = length(spline.knots[]) - spline.degree[] - 1
-        for i in length(points)+1:adjusted_end
-            line .+= points[end] * calc_point.((spline,), i, ts)
-        end
+        # adjusted_end = length(spline.knots[]) - spline.degree[] - 1
+        # for i in length(points)+1:adjusted_end
+        #     line .+= points[end] * calc_point.((spline,), i, ts)
+        # end
     end
     notify.(spline.line)
 end
@@ -527,12 +528,12 @@ end
 #= drawings {{{=#
 
 function draw_splines(
-    xs::Vector{R},
+    xs::Vector{<:Real},
     degree::Integer=DEFAULT_DEGREE,
     accuracy::Integer=DEFAULT_ACCURACY;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-) where {R<:Real}
+)
     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
     ax = Axis(fig[1, 1])
     step = (maximum(xs) - minimum(xs)) / (accuracy - 1)
@@ -614,7 +615,8 @@ end
 
 #= calculations {{{=#
 
-function calc_points!(plane::SplinePlane{R}) where {R<:Real}
+function calc_points!(plane::SplinePlane)
+    R = typeof(plane).parameters[1]
     yacc, xacc = plane.accuracy[]
     ydeg, xdeg = plane.degree[]
     sy, sx = size(plane.coeffs[])
@@ -723,7 +725,7 @@ function Demo!(
     line::AbstractLine;
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::NTuple{2,Integer}=(1,2),
+    dims::NTuple{2,Integer}=(1, 2),
 )
     plt, sct = add_plots!(ax, line, dims; scatter_kwargs, plot_kwargs)
     moving = Observable(nothing)
@@ -744,7 +746,7 @@ function Demo(
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::NTuple{2,Integer}=(1,2),
+    dims::NTuple{2,Integer}=(1, 2),
 )
     return Demo!(
         fig_and_ax(fig_kwargs)[2],
@@ -810,7 +812,7 @@ function Demo!(
     line::AbstractLine;
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::NTuple{2,Integer}=(1,2),
+    dims::NTuple{2,Integer}=(1, 2),
 )
     background!(ax, img)
     return Demo!(ax, line; scatter_kwargs, plot_kwargs, dims)
@@ -822,7 +824,7 @@ function Demo(
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::NTuple{2,Integer}=(1,2),
+    dims::NTuple{2,Integer}=(1, 2),
 )
     return Demo!(
         fig_and_ax(fig_kwargs)[2],
@@ -951,18 +953,18 @@ function StaticDemo!(
     fixed_points = Observable.((Vector{R}(), Vector{R}()))
     fixed_line = [
         (Observables.@map keep_alike!(
-        &(fixed_line[dim]),
-        &(line.line[dim]),
-        R(fix[dim]);
-        replace=false,
-    )) for dim in 1:2]
+            &(fixed_line[dim]),
+            &(line.line[dim]),
+            R(fix[dim]);
+            replace=false,
+        )) for dim in 1:2]
     fixed_points = [
         (Observables.@map keep_alike!(
-        &(fixed_points[dim]),
-        &(line.points[dim]),
-        R(fix[dim]);
-        replace=false,
-    )) for dim in 1:2]
+            &(fixed_points[dim]),
+            &(line.points[dim]),
+            R(fix[dim]);
+            replace=false,
+        )) for dim in 1:2]
     zero_points, zero_line = Observable.((Vector{R}(), Vector{R}()))
     zero_points = Observables.@map keep_alike!(
         &(zero_points),
