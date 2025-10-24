@@ -11,9 +11,6 @@ const DEFAULT_ACCURACY = 200
 const DEFAULT_DEGREE = 2
 const DEFAULT_PLANE_ACCURACY = (DEFAULT_ACCURACY, DEFAULT_ACCURACY)
 const DEFAULT_PLANE_DEGREE = (DEFAULT_DEGREE, DEFAULT_DEGREE)
-# const CONFIG = Dict(
-#     :mouse_priority => 1,
-# )
 
 
 GLMakie.activate!(framerate=60)
@@ -240,7 +237,9 @@ function default_kwargs(
         )
     elseif type == :plot_3d
         return Dict(
-            :linewidth => 3,
+            :colormap => :thermal,
+            # TODO how to set this
+            # :color => range,
         )
     elseif type == :scatter_3d
         return Dict(
@@ -254,7 +253,7 @@ function default_kwargs(
         return Dict(
             :colormap => :viridis,
             :linewidth => 3,
-            # TODO how to set this here properly
+            # TODO how to set this
             # :color => 1:levels,
             :levels => levels,
         )
@@ -262,8 +261,6 @@ function default_kwargs(
         error("No default args defined for: $(type)")
     end
 end
-
-# function default_scatter_color
 
 #= }}}=#
 
@@ -336,14 +333,6 @@ function Spline(
         adjust_sizes!(spline)
         calc_points!(spline)
     end
-    # for dim in eachindex(spline.points)
-    #     on(spline.points[dim]) do _
-    #         # TODO detect size change and adjust only then
-    #         adjust_knots!(spline)
-    #         adjust_sizes!(spline)
-    #         calc_points!(spline)
-    #     end
-    # end
     if length(knots) == 0
         adjust_knots!(spline)
     end
@@ -870,10 +859,10 @@ function StaticDemo!(
     ax::Axis3,
     plane::AbstractPlane;
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_type::Symbol=:contour
+    plot_type::Symbol=:surface
 )
-    if plot_type == :lines
-        plt = lines!(
+    if plot_type == :surface
+        plt = surface!(
             ax,
             plane.ts...,
             plane.plane;
@@ -1015,6 +1004,7 @@ function Demo(
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plane_plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_type::Symbol=:surface,
     plane_dim::Symbol=:z,
     move::Real=0.0,
 )
@@ -1022,6 +1012,7 @@ function Demo(
         plane;
         fig_kwargs,
         plot_kwargs=plane_plot_kwargs,
+        plot_type,
     )
     ax = Axis(demo.fig[1, 2])
     StaticDemo!(
