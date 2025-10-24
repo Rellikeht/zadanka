@@ -11,6 +11,10 @@ const DEFAULT_ACCURACY = 200
 const DEFAULT_DEGREE = 2
 const DEFAULT_PLANE_ACCURACY = (DEFAULT_ACCURACY, DEFAULT_ACCURACY)
 const DEFAULT_PLANE_DEGREE = (DEFAULT_DEGREE, DEFAULT_DEGREE)
+# const CONFIG = Dict(
+#     :mouse_priority => 1,
+# )
+
 
 GLMakie.activate!(framerate=60)
 
@@ -19,6 +23,8 @@ abstract type AbstractLine{R<:Real,N} <: AbstractParametric end
 abstract type AbstractPlane{R<:Real} <: AbstractParametric end
 
 #= helpers {{{=#
+
+#= general {{{=#
 
 function tuple_of_vectors(
     data::Union{
@@ -63,30 +69,6 @@ function normalize(arr::AbstractArray)
     return result ./ maximum(result)
 end
 
-function fig_and_ax(
-    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    dimentions::Integer=2,
-)
-    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    ax = nothing
-    if dimentions == 2
-        ax = Axis(fig[1, 1])
-    elseif dimentions == 3
-        ax = Axis3(fig[1, 1])
-    elseif dimentions < 2
-        error("Cannot draw in dimention lower than 2")
-    else
-        error("Cannot draw in dimention higher than 3")
-    end
-    return (fig, ax)
-end
-
-function background!(ax::Axis, img::AbstractMatrix{<:Real})
-    imgp = image!(ax, img)
-    translate!(imgp, 0, 0, -10)
-    return imgp
-end
-
 function keep_alike!(
     arr::Union{Observable{<:AbstractVector{T}},AbstractVector{T}},
     target::Union{Observable{<:AbstractVector{T}},AbstractVector{T}},
@@ -115,6 +97,87 @@ function keep_alike!(
     end
     arr
 end
+
+#= }}}=#
+
+#= plotting {{{=#
+
+function fig_and_ax(
+    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    dimentions::Integer=2,
+)
+    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
+    ax = nothing
+    if dimentions == 2
+        ax = Axis(fig[1, 1])
+    elseif dimentions == 3
+        ax = Axis3(fig[1, 1])
+    elseif dimentions < 2
+        error("Cannot draw in dimention lower than 2")
+    else
+        error("Cannot draw in dimention higher than 3")
+    end
+    return fig, ax
+end
+
+function background!(ax::Axis, img::AbstractMatrix{<:Real})
+    imgp = image!(ax, img)
+    translate!(imgp, 0, 0, -10)
+    return imgp
+end
+
+function add_plots!(
+    ax::Union{Axis,Axis3},
+    line::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N},
+    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N};
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    ptype, stype = (typeof(ax) == Axis3) ? (:plot_3d, :scatter_3d) : (:plot, :scatter)
+    plt = lines!(ax, line...; (default_kwargs(ptype, plot_kwargs, line[begin]))...)
+    sct = scatter!(ax, points...; (default_kwargs(stype, scatter_kwargs, points[begin]))...)
+    return plt, sct
+end
+
+# TODO generalize
+function add_plots!(
+    ax::Axis,
+    line::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N},
+    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N},
+    dims::NTuple{2,Integer};
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    plt = lines!(
+        ax,
+        line[dims[1]],
+        line[dims[2]];
+        (default_kwargs(:plot, plot_kwargs, line[begin]))...
+    )
+    sct = scatter!(
+        ax,
+        points[dims[1]],
+        points[dims[2]];
+        (default_kwargs(:scatter, scatter_kwargs, points[begin]))...
+    )
+    return plt, sct
+end
+
+function add_plots!(
+    ax::Union{Axis,Axis3},
+    line::AbstractLine{<:Real,N} where N,
+    dims::Union{NTuple{2,Integer},Nothing}=nothing;
+    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+)
+    if dims === nothing
+        return add_plots!(ax, line.line, line.points; scatter_kwargs, plot_kwargs)
+    else
+        return add_plots!(ax, line.line, line.points, dims; scatter_kwargs, plot_kwargs)
+    end
+end
+
+#= }}}=#
 
 #= }}}=#
 
@@ -267,14 +330,20 @@ function Spline(
     end
     # TODO changing (and checking) knots
     on(_ -> calc_points!(spline), spline.knots)
-    for dim in eachindex(spline.points)
-        on(spline.points[dim]) do _
-            # TODO detect size change and adjust only then
-            adjust_knots!(spline)
-            adjust_sizes!(spline)
-            calc_points!(spline)
-        end
+    on(spline.points[begin]) do _
+        # TODO detect size change and adjust only then
+        adjust_knots!(spline)
+        adjust_sizes!(spline)
+        calc_points!(spline)
     end
+    # for dim in eachindex(spline.points)
+    #     on(spline.points[dim]) do _
+    #         # TODO detect size change and adjust only then
+    #         adjust_knots!(spline)
+    #         adjust_sizes!(spline)
+    #         calc_points!(spline)
+    #     end
+    # end
     if length(knots) == 0
         adjust_knots!(spline)
     end
@@ -421,7 +490,7 @@ function calc_points!(spline::Spline)
             line .+= points[end] * calc_point.((spline,), i, ts)
         end
     end
-    notify(spline.line[begin])
+    notify.(spline.line)
 end
 
 #= }}}=#
@@ -442,7 +511,7 @@ function rotate!(
     for dim in [1, 2]
         spline.points[dim][] .-= around[dim]
     end
-    notify(spline.points[begin])
+    notify.(spline.points)
 end
 
 # TODO proper 3d rotations
@@ -461,7 +530,7 @@ function rotate_around_z!(
     for dim in [1, 2]
         spline.points[dim][] .+= ax[dim]
     end
-    notify(spline.points[begin])
+    notify.(spline.points)
 end
 
 #= }}}=#
@@ -640,12 +709,12 @@ function register_actions!(demo::Demo)
     on(
         on_mouse_button(demo),
         events(demo.ax).mousebutton,
-        priority=5
+        priority=1
     )
     on(
         on_mouse_position(demo),
         events(demo.ax).mouseposition,
-        priority=5
+        priority=1
     )
 end
 
@@ -656,18 +725,7 @@ function Demo!(
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     dims::NTuple{2,Integer}=(1,2),
 )
-    plt = lines!(
-        ax,
-        line.line[dims[1]],
-        line.line[dims[2]];
-        (default_kwargs(:plot, plot_kwargs, line.line[begin]))...
-    )
-    sct = scatter!(
-        ax,
-        line.points[dims[1]],
-        line.points[dims[2]];
-        (default_kwargs(:scatter, scatter_kwargs, line.points[begin]))...
-    )
+    plt, sct = add_plots!(ax, line, dims; scatter_kwargs, plot_kwargs)
     moving = Observable(nothing)
     object = Demo(
         line,
@@ -780,19 +838,6 @@ end
 
 #= static demos {{{=#
 
-function add_plots!(
-    ax::Union{Axis,Axis3},
-    lines::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N},
-    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N};
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-)
-    ptype, stype = (typeof(ax) == Axis3) ? (:plot_3d, :scatter_3d) : (:plot, :scatter)
-    plt = lines!(ax, lines...; (default_kwargs(ptype, plot_kwargs, lines[begin]))...)
-    sct = scatter!(ax, points...; (default_kwargs(stype, scatter_kwargs, points[begin]))...)
-end
-
-
 function StaticDemo!(
     ax::Union{Axis,Axis3},
     line::AbstractLine;
@@ -808,7 +853,7 @@ function StaticDemo!(
     scatter_kwargs::Union{Dict,NamedTuple,Nothing},
     plot_kwargs::Union{Dict,NamedTuple,Nothing},
 )
-    add_plots!(ax, line.lines, line.points; scatter_kwargs, plot_kwargs)
+    plt, sct = add_plots!(ax, line; scatter_kwargs, plot_kwargs)
     moving = Observable(nothing)
     object = Demo(
         line,
@@ -902,18 +947,6 @@ function StaticDemo!(
 )
     lines, points = (), ()
     R = typeof(line).parameters[1]
-    zero_points, zero_line = Observable.((Vector{R}(), Vector{R}()))
-    zero_points = Observables.@map keep_alike!(
-        &(zero_points),
-        &(line.points[begin]),
-        R(move),
-    )
-    zero_line = Observables.@map keep_alike!(
-        &(zero_line),
-        &(line.line[begin]),
-        R(move),
-    )
-
     fixed_line = Observable.((Vector{R}(), Vector{R}()))
     fixed_points = Observable.((Vector{R}(), Vector{R}()))
     fixed_line = [
@@ -929,7 +962,18 @@ function StaticDemo!(
         &(line.points[dim]),
         R(fix[dim]);
         replace=false,
-        )) for dim in 1:2]
+    )) for dim in 1:2]
+    zero_points, zero_line = Observable.((Vector{R}(), Vector{R}()))
+    zero_points = Observables.@map keep_alike!(
+        &(zero_points),
+        &(line.points[begin]),
+        R(move),
+    )
+    zero_line = Observables.@map keep_alike!(
+        &(zero_line),
+        &(line.line[begin]),
+        R(move),
+    )
 
     if plane_dim == :x
         lines = (zero_line, fixed_line[1], fixed_line[2])
@@ -967,6 +1011,7 @@ function Demo(
     plane::AbstractPlane,
     line::AbstractLine{<:Real,2},
     img::Union{AbstractMatrix{<:Real},Nothing}=nothing;
+    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plane_plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
@@ -975,6 +1020,7 @@ function Demo(
 )
     demo = StaticDemo(
         plane;
+        fig_kwargs,
         plot_kwargs=plane_plot_kwargs,
     )
     ax = Axis(demo.fig[1, 2])
@@ -1045,7 +1091,7 @@ function on_mouse_button(obj::Demo, dim_fix::Integer=0)
                         for j in eachindex(obj.object.points)
                             deleteat!(obj.object.points[j][], i)
                         end
-                        notify(obj.object.points[begin])
+                        notify.(obj.object.points)
                         return Consume(true)
                     end
                 elseif Keyboard.a in events(obj.fig).keyboardstate
@@ -1055,7 +1101,7 @@ function on_mouse_button(obj::Demo, dim_fix::Integer=0)
                         for j in eachindex(obj.object.points)
                             push!(obj.object.points[j][], pos[j+dim_fix])
                         end
-                        notify(obj.object.points[begin])
+                        notify.(obj.object.points)
                         return Consume(true)
                     end
                 end
@@ -1071,7 +1117,7 @@ function on_mouse_button(obj::Demo, dim_fix::Integer=0)
                     for j in eachindex(obj.object.points)
                         obj.object.points[j][][obj.moving[]] = pos[j+dim_fix]
                     end
-                    notify(obj.object.points[begin])
+                    notify.(obj.object.points)
                     obj.moving[] = nothing
                     return Consume(true)
                 end
@@ -1090,7 +1136,7 @@ function on_mouse_position(obj::Demo, dim_fix::Integer=0)
         for j in eachindex(obj.object.points)
             obj.object.points[j][][obj.moving[]] = pos[j+dim_fix]
         end
-        notify(obj.object.points[begin])
+        notify.(obj.object.points)
         return Consume(true)
     end
 end

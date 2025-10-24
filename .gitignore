@@ -89,3 +89,4 @@ optymalizacja/**/tests
 deps/
 .local.*
 .*.local
+*.vim
