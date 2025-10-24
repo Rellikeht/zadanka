@@ -15,8 +15,8 @@ const DEFAULT_PLANE_DEGREE = (DEFAULT_DEGREE, DEFAULT_DEGREE)
 GLMakie.activate!(framerate=60)
 
 abstract type AbstractParametric end
-abstract type AbstractLine <: AbstractParametric end
-abstract type AbstractPlane <: AbstractParametric end
+abstract type AbstractLine{R<:Real,N} <: AbstractParametric end
+abstract type AbstractPlane{R<:Real} <: AbstractParametric end
 
 #= helpers {{{=#
 
@@ -79,6 +79,41 @@ function fig_and_ax(
         error("Cannot draw in dimention higher than 3")
     end
     return (fig, ax)
+end
+
+function background!(ax::Axis, img::AbstractMatrix{<:Real})
+    imgp = image!(ax, img)
+    translate!(imgp, 0, 0, -10)
+    return imgp
+end
+
+function keep_alike!(
+    arr::Union{Observable{<:AbstractVector{T}},AbstractVector{T}},
+    target::Union{Observable{<:AbstractVector{T}},AbstractVector{T}},
+    value::Union{T,Nothing}=nothing;
+    replace::Bool=true,
+) where {T}
+    if arr isa Observable
+        arr = arr[]
+    end
+    if target isa Observable
+        target = target[]
+    end
+    if value === nothing
+        value = zero(T)
+    end
+    target_len = length(target)
+    if length(arr) != target_len
+        resize!(arr, target_len)
+        if replace
+            fill!(arr, value)
+        end
+    end
+    if !replace
+        arr .= target
+        arr .+= value
+    end
+    arr
 end
 
 #= }}}=#
@@ -173,7 +208,7 @@ end
 
 #= definitions {{{=#
 
-struct Spline{R<:Real,N} <: AbstractLine
+struct Spline{R<:Real,N} <: AbstractLine{R,N}
     accuracy::Observable{<:Integer}
     degree::Observable{<:Integer}
     knots::Observable{<:AbstractVector{R}}
@@ -463,7 +498,7 @@ end
 
 #= definitions {{{=#
 
-struct SplinePlane{R<:Real} <: AbstractPlane
+struct SplinePlane{R<:Real} <: AbstractPlane{R}
     "heights of plane (coefficients of a matrix; can be set by user)"
     coeffs::Observable{<:AbstractMatrix{R}}
     "size of output plane (can be set by user)"
@@ -619,10 +654,20 @@ function Demo!(
     line::AbstractLine;
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::AbstractUnitRange=1:2,
+    dims::NTuple{2,Integer}=(1,2),
 )
-    plt = lines!(ax, line.line[dims]...; (default_kwargs(:plot, plot_kwargs, line.line[begin]))...)
-    sct = scatter!(ax, line.points[dims]...; (default_kwargs(:scatter, scatter_kwargs, line.points[begin]))...)
+    plt = lines!(
+        ax,
+        line.line[dims[1]],
+        line.line[dims[2]];
+        (default_kwargs(:plot, plot_kwargs, line.line[begin]))...
+    )
+    sct = scatter!(
+        ax,
+        line.points[dims[1]],
+        line.points[dims[2]];
+        (default_kwargs(:scatter, scatter_kwargs, line.points[begin]))...
+    )
     moving = Observable(nothing)
     object = Demo(
         line,
@@ -641,7 +686,7 @@ function Demo(
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::AbstractUnitRange=1:2,
+    dims::NTuple{2,Integer}=(1,2),
 )
     return Demo!(
         fig_and_ax(fig_kwargs)[2],
@@ -653,7 +698,7 @@ function Demo(
 end
 
 function calculate_t_obs(
-    t_obs::Observable{<:Vector{<:Real}},
+    t_obs::Observable{<:AbstractVector{<:Real}},
     spline::Spline,
 )
     len = length(spline.points[begin][]) - 1
@@ -707,10 +752,9 @@ function Demo!(
     line::AbstractLine;
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::AbstractUnitRange=1:2,
+    dims::NTuple{2,Integer}=(1,2),
 )
-    imgp = image!(ax, img)
-    translate!(imgp, 0, 0, -10)
+    background!(ax, img)
     return Demo!(ax, line; scatter_kwargs, plot_kwargs, dims)
 end
 
@@ -720,7 +764,7 @@ function Demo(
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    dims::AbstractUnitRange=1:2,
+    dims::NTuple{2,Integer}=(1,2),
 )
     return Demo!(
         fig_and_ax(fig_kwargs)[2],
@@ -738,8 +782,8 @@ end
 
 function add_plots!(
     ax::Union{Axis,Axis3},
-    lines::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N,
-    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N;
+    lines::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N},
+    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N};
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
@@ -854,29 +898,48 @@ function StaticDemo!(
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plane_dim::Symbol=:z,
     move::Real=0.0,
+    fix::NTuple{2,Real}=(0.0, 0.0),
 )
     lines, points = (), ()
     R = typeof(line).parameters[1]
-    zero_points = Observable(fill(R(move), length(line.points[begin][])))
-    zero_line = Observable(fill(R(move), length(line.line[begin][])))
-    on(line.points[begin]) do _
-        resize!(zero_points, length(line.points[begin][]))
-        fill!(zero_points, R(move))
-    end
-    on(line.line[begin]) do _
-        resize!(zero_line, length(line.line[begin][]))
-        fill!(zero_line, R(move))
-    end
+    zero_points, zero_line = Observable.((Vector{R}(), Vector{R}()))
+    zero_points = Observables.@map keep_alike!(
+        &(zero_points),
+        &(line.points[begin]),
+        R(move),
+    )
+    zero_line = Observables.@map keep_alike!(
+        &(zero_line),
+        &(line.line[begin]),
+        R(move),
+    )
+
+    fixed_line = Observable.((Vector{R}(), Vector{R}()))
+    fixed_points = Observable.((Vector{R}(), Vector{R}()))
+    fixed_line = [
+        (Observables.@map keep_alike!(
+        &(fixed_line[dim]),
+        &(line.line[dim]),
+        R(fix[dim]);
+        replace=false,
+    )) for dim in 1:2]
+    fixed_points = [
+        (Observables.@map keep_alike!(
+        &(fixed_points[dim]),
+        &(line.points[dim]),
+        R(fix[dim]);
+        replace=false,
+        )) for dim in 1:2]
 
     if plane_dim == :x
-        lines = (zero_line, line.line[1], line.line[2])
-        points = (zero_points, line.points[1], line.points[2])
+        lines = (zero_line, fixed_line[1], fixed_line[2])
+        points = (zero_points, fixed_points[1], fixed_points[2])
     elseif plane_dim == :y
-        lines = (line.line[1], zero_line, line.line[2])
-        points = (line.points[1], zero_points, line.points[2])
+        lines = (fixed_line[1], zero_line, fixed_line[2])
+        points = (fixed_points[1], zero_points, fixed_points[2])
     elseif plane_dim == :z
-        lines = (line.line[1], line.line[2], zero_line)
-        points = (line.points[1], line.points[2], zero_points)
+        lines = (fixed_line[1], fixed_line[2], zero_line)
+        points = (fixed_points[1], fixed_points[2], zero_points)
     else
         error("Invalid dimention: $(plane_dim)")
     end
@@ -900,38 +963,35 @@ end
 
 #= other demos {{{=#
 
-function MovingPlaneDemo(
-    splines::NTuple{2,Spline},
-    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+function Demo(
+    plane::AbstractPlane,
+    line::AbstractLine{<:Real,2},
+    img::Union{AbstractMatrix{<:Real},Nothing}=nothing;
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plane_plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
+    plane_dim::Symbol=:z,
+    move::Real=0.0,
 )
-    return MovingPlaneDemo(
-        SplinePlane(splines);
-        fig_kwargs,
+    demo = StaticDemo(
+        plane;
+        plot_kwargs=plane_plot_kwargs,
+    )
+    ax = Axis(demo.fig[1, 2])
+    StaticDemo!(
+        demo.ax,
+        line;
         scatter_kwargs,
         plot_kwargs,
+        plane_dim,
+        move,
+        fix=(-1.0, -1.0),
     )
-end
-
-function MovingPlaneDemo(
-    plane::AbstractPlane;
-    fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
-    scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    scatter_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-    plot_3d_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
-)
-    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    axs = (Axis3(fig[1:2, 1:2]), Axis(fig[1, 3]), Axis(fig[2, 3]))
-    plane_demo = StaticDemo!(
-        axs[1],
-        plane;
-        scatter_kwargs=scatter_3d_kwargs,
-        plot_kwargs=plot_3d_kwargs,
-    )
-    line_demos = Demo!.(axs[2:end], (plane.xline[], plane.yline[]); scatter_kwargs, plot_kwargs)
-    return (plane_demo, line_demos...)
+    Demo!(ax, line; scatter_kwargs, plot_kwargs)
+    if img !== nothing
+        background!(ax, img)
+    end
+    return demo
 end
 
 function EditablePlaneDemo(
