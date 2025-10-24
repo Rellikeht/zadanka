@@ -583,6 +583,9 @@ function SplinePlane(
     degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
 )
     R = typeof(coeffs).parameters[1]
+    if accuracy < size(coeffs)
+        error("Not enough output to fit coefficients")
+    end
     plane = SplinePlane(
         Observable(coeffs),
         Observable(accuracy),
@@ -616,8 +619,8 @@ function calc_points!(plane::SplinePlane{R}) where {R<:Real}
     ydeg, xdeg = plane.degree[]
     sy, sx = size(plane.coeffs[])
 
-    resize!.(plane.knots, size(plane.coeffs[]) .+ plane.degree[] .+ 1)
-    get_knots!.(plane.knots, R.(size(plane.coeffs[])), plane.degree[])
+    resize!.(plane.knots, (sx, sy) .+ plane.degree[] .+ 1)
+    get_knots!.(plane.knots, R.((sx, sy)), plane.degree[])
     adjust_ts!.(plane.ts, plane.accuracy[], plane.knots)
     if size(plane.plane[]) != (yacc, xacc)
         plane.plane[] = zeros((yacc, xacc))
@@ -647,12 +650,20 @@ function calc_points!(plane::SplinePlane{R}) where {R<:Real}
             plane.xspline[begin] = 1
         end
         @views for x in 1:sx
+            if coeffs[y, x] == 0
+                continue
+            end
             transpose(temp_plane) .= plane.xspline
             if x == 1
                 ysplines[begin, x] = 1
             end
+            # numerically unstable
+            ysplines[:, x] .*= coeffs[y, x]
             temp_plane .*= ysplines[:, x]
-            temp_plane .*= coeffs[y, x]
+            ysplines[:, x] ./= coeffs[y, x]
+            # more numerically stable but slower
+            # temp_plane .*= ysplines[:, x]
+            # temp_plane .*= coeffs[y, x]
             if x == 1
                 ysplines[begin, x] = 0
             end
