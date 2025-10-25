@@ -464,6 +464,7 @@ function calc_point(
     return calc_point(spline.knots[], spline.degree[], index, x)
 end
 
+# TODO separate from spline
 function calc_points!(spline::Spline)
     @views @inbounds for dim in eachindex(spline.line)
         line, points, ts = spline.line[dim][], spline.points[dim][], spline.ts[]
@@ -615,6 +616,53 @@ end
 
 #= calculations {{{=#
 
+function update_plane!(
+    plane::AbstractMatrix{R},
+    coeffs::AbstractMatrix{R},
+    xspline::AbstractVector{R},
+    ysplines::AbstractMatrix{R},
+    temp_plane::AbstractMatrix{R},
+    ts::NTuple{2,AbstractVector{R}},
+    knots::NTuple{2,AbstractVector{R}},
+    degree::NTuple{2,Real},
+) where {R}
+    sy, sx = size(coeffs)
+    ydeg, xdeg = degree
+    @inbounds @views for x in 1:sx
+        ysplines[:, x] .= calc_point.((knots[1],), ydeg, x, ts[1])
+    end
+    @inbounds for y in 1:sy
+        xspline .= calc_point.((knots[2],), xdeg, y, ts[2])
+        if y == 1
+            xspline[begin] = 1
+        end
+        for x in 1:sx
+            if coeffs[y, x] == 0
+                continue
+            end
+            transpose(temp_plane) .= xspline
+            if x == 1
+                ysplines[begin, x] = 1
+            end
+            # numerically unstable
+            (@view ysplines[:, x]) .*= coeffs[y, x]
+            @views temp_plane .*= ysplines[:, x]
+            (@view ysplines[:, x]) ./= coeffs[y, x]
+            # more numerically stable but slower
+            # temp_plane .*= ysplines[:, x]
+            # temp_plane .*= coeffs[y, x]
+            if x == 1
+                ysplines[begin, x] = 0
+            end
+            plane .+= temp_plane
+        end
+        if y == 1
+            xspline[begin] = 0
+        end
+    end
+
+end
+
 function calc_points!(plane::SplinePlane)
     R = typeof(plane).parameters[1]
     yacc, xacc = plane.accuracy[]
@@ -640,41 +688,16 @@ function calc_points!(plane::SplinePlane)
         end
     end
 
-    coeffs, ysplines = plane.coeffs[], plane.ysplines[]
-    temp_plane, output = plane.temp_plane[], plane.plane[]
-    ts = (o -> o[]).(plane.ts)
-    @inbounds @views for x in 1:sx
-        ysplines[:, x] .= calc_point.((plane.knots[1],), ydeg, x, ts[1])
-    end
-    @inbounds for y in 1:sy
-        plane.xspline .= calc_point.((plane.knots[2],), xdeg, y, ts[2])
-        if y == 1
-            plane.xspline[begin] = 1
-        end
-        @views for x in 1:sx
-            if coeffs[y, x] == 0
-                continue
-            end
-            transpose(temp_plane) .= plane.xspline
-            if x == 1
-                ysplines[begin, x] = 1
-            end
-            # numerically unstable
-            ysplines[:, x] .*= coeffs[y, x]
-            temp_plane .*= ysplines[:, x]
-            ysplines[:, x] ./= coeffs[y, x]
-            # more numerically stable but slower
-            # temp_plane .*= ysplines[:, x]
-            # temp_plane .*= coeffs[y, x]
-            if x == 1
-                ysplines[begin, x] = 0
-            end
-            output .+= temp_plane
-        end
-        if y == 1
-            plane.xspline[begin] = 0
-        end
-    end
+    update_plane!(
+        plane.plane[],
+        plane.coeffs[],
+        plane.xspline,
+        plane.ysplines[],
+        plane.temp_plane[],
+        (o -> o[]).(plane.ts),
+        plane.knots,
+        (ydeg, xdeg),
+    )
     notify(plane.plane)
 end
 
