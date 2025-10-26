@@ -12,12 +12,11 @@ const DEFAULT_DEGREE = 2
 const DEFAULT_PLANE_ACCURACY = (DEFAULT_ACCURACY, DEFAULT_ACCURACY)
 const DEFAULT_PLANE_DEGREE = (DEFAULT_DEGREE, DEFAULT_DEGREE)
 
-
-GLMakie.activate!(framerate=60)
-
 abstract type AbstractParametric end
 abstract type AbstractLine{R<:Real,N} <: AbstractParametric end
 abstract type AbstractPlane{R<:Real} <: AbstractParametric end
+
+GLMakie.activate!(framerate=60)
 
 #= helpers {{{=#
 
@@ -101,14 +100,14 @@ end
 
 function fig_and_ax(
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     dimentions::Integer=2,
 )
-    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    ax = nothing
+    fig = Figure(; default_kwargs(:figure, fig_kwargs)...)
     if dimentions == 2
-        ax = Axis(fig[1, 1])
+        ax = Axis(fig[1, 1]; default_kwargs(:axis, ax_kwargs)...)
     elseif dimentions == 3
-        ax = Axis3(fig[1, 1])
+        ax = Axis3(fig[1, 1]; default_kwargs(:axis_3d, ax_kwargs)...)
     elseif dimentions < 2
         error("Cannot draw in dimention lower than 2")
     else
@@ -206,10 +205,14 @@ function default_kwargs(
     base::Union{
         AbstractUnitRange,
         AbstractVecOrMat,
-        Observable{<:Union{AbstractUnitRange,AbstractVecOrMat}}
-    }
+        Observable{<:Union{AbstractUnitRange,AbstractVecOrMat}},
+        Nothing,
+    }=nothing
 )
-    range = color_range_observable(base)
+    range = nothing
+    if base !== nothing
+        range = color_range_observable(base)
+    end
     if kwargs === nothing
         return Dict()
     elseif kwargs != DEFAULT_INDICATOR
@@ -222,33 +225,33 @@ function default_kwargs(
             for (k, v) in pairs(kwargs)
         ))
     end
-    if type == :plot
+    if type === :plot
         return Dict(
             :linewidth => 4,
             :colormap => :viridis,
             :color => range,
         )
-    elseif type == :scatter
+    elseif type === :scatter
         return Dict(
             :colormap => :viridis,
             :color => range,
             :markersize => 15,
             :strokewidth => 0,
         )
-    elseif type == :plot_3d
+    elseif type === :plot_3d
         return Dict(
             :colormap => :thermal,
             # TODO how to set this
             # :color => range,
         )
-    elseif type == :scatter_3d
+    elseif type === :scatter_3d
         return Dict(
             :colormap => :viridis,
             :color => range,
             :markersize => 10,
             :strokewidth => 0,
         )
-    elseif type == :contour_3d
+    elseif type === :contour_3d
         levels = 20
         return Dict(
             :colormap => :viridis,
@@ -257,6 +260,8 @@ function default_kwargs(
             # :color => 1:levels,
             :levels => levels,
         )
+    elseif type === :figure || type === :axis || type === :axis_3d
+        return Dict()
     else
         error("No default args defined for: $(type)")
     end
@@ -533,10 +538,11 @@ function draw_splines(
     degree::Integer=DEFAULT_DEGREE,
     accuracy::Integer=DEFAULT_ACCURACY;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
-    fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    ax = Axis(fig[1, 1])
+    fig = Figure(; default_kwargs(fig_kwargs, :figure)...)
+    ax = Axis(fig[1, 1]; default_kwargs(ax_kwargs, :axis)...)
     step = (maximum(xs) - minimum(xs)) / (accuracy - 1)
     range = minimum(xs):step:maximum(xs)
     knots = get_knots(xs, degree)
@@ -660,7 +666,6 @@ function update_plane!(
             xspline[begin] = 0
         end
     end
-
 end
 
 function calc_points!(plane::SplinePlane)
@@ -668,7 +673,6 @@ function calc_points!(plane::SplinePlane)
     yacc, xacc = plane.accuracy[]
     ydeg, xdeg = plane.degree[]
     sy, sx = size(plane.coeffs[])
-
     resize!.(plane.knots, (sx, sy) .+ plane.degree[] .+ 1)
     get_knots!.(plane.knots, R.((sx, sy)), plane.degree[])
     adjust_ts!.(plane.ts, plane.accuracy[], plane.knots)
@@ -687,7 +691,6 @@ function calc_points!(plane::SplinePlane)
             collection[] = Matrix{R}(undef, (yacc, xacc))
         end
     end
-
     update_plane!(
         plane.plane[],
         plane.coeffs[],
@@ -767,12 +770,13 @@ end
 function Demo(
     line::AbstractLine;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     dims::NTuple{2,Integer}=(1, 2),
 )
     return Demo!(
-        fig_and_ax(fig_kwargs)[2],
+        fig_and_ax(fig_kwargs, ax_kwargs)[2],
         line;
         scatter_kwargs,
         plot_kwargs,
@@ -818,11 +822,12 @@ end
 function Demo(
     spline::Spline{<:Real,1};
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     return Demo!(
-        fig_and_ax(fig_kwargs)[2],
+        fig_and_ax(fig_kwargs, ax_kwargs)[2],
         spline;
         scatter_kwargs,
         plot_kwargs,
@@ -845,12 +850,13 @@ function Demo(
     img::AbstractMatrix,
     line::AbstractLine;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     dims::NTuple{2,Integer}=(1, 2),
 )
     return Demo!(
-        fig_and_ax(fig_kwargs)[2],
+        fig_and_ax(fig_kwargs, ax_kwargs)[2],
         img,
         line;
         scatter_kwargs,
@@ -936,11 +942,12 @@ end
 function StaticDemo(
     line::AbstractLine;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     return StaticDemo!(
-        fig_and_ax(fig_kwargs, length(line.points))[2],
+        fig_and_ax(fig_kwargs, ax_kwargs, length(line.points))[2],
         line;
         scatter_kwargs,
         plot_kwargs
@@ -950,11 +957,12 @@ end
 function StaticDemo(
     plane::AbstractPlane;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_type::Symbol=:contour,
 )
     return StaticDemo!(
-        fig_and_ax(fig_kwargs, 3)[2],
+        fig_and_ax(fig_kwargs, ax_kwargs, 3)[2],
         plane;
         plot_kwargs,
         plot_type,
@@ -974,6 +982,7 @@ function StaticDemo!(
     R = typeof(line).parameters[1]
     fixed_line = Observable.((Vector{R}(), Vector{R}()))
     fixed_points = Observable.((Vector{R}(), Vector{R}()))
+
     fixed_line = [
         (Observables.@map keep_alike!(
             &(fixed_line[dim]),
@@ -1037,6 +1046,7 @@ function Demo(
     line::AbstractLine{<:Real,2},
     img::Union{AbstractMatrix{<:Real},Nothing}=nothing;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plane_plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
@@ -1050,7 +1060,7 @@ function Demo(
         plot_kwargs=plane_plot_kwargs,
         plot_type,
     )
-    ax = Axis(demo.fig[1, 2])
+    ax = Axis(demo.fig[1, 2]; default_kwargs(ax_kwargs, :axis)...)
     StaticDemo!(
         demo.ax,
         line;
@@ -1070,11 +1080,12 @@ end
 function EditablePlaneDemo(
     plane::AbstractPlane;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    ax = Axis3(fig[1, 1])
+    ax = Axis3(fig[1, 1]; default_kwargs(ax_kwargs, :axis_3d)...)
     # TODO demo with modifiable points in 3d
     # TODO may be better to have points in separate plot
     # axs = (Axis3(fig[1, 1]), Axis3(fig[1, 2]))
@@ -1092,12 +1103,14 @@ function EditablePlaneDemo(
     degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
     accuracy::NTuple{2,Integer}=DEFAULT_PLANE_ACCURACY,
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
+    ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     scatter_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     return EditablePlaneDemo(
         SplinePlane(coeffs; degree, accuracy);
         fig_kwargs,
+        ax_kwargs,
         scatter_kwargs,
         plot_kwargs,
     )
