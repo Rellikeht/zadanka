@@ -260,6 +260,13 @@ function default_kwargs(
             # :color => 1:levels,
             :levels => levels,
         )
+    elseif type === :wireframe
+        return Dict(
+            :color => :blue,
+            # :colormap => :viridis,
+            # :color => range,
+            :linewidth => 2,
+        )
     elseif type === :figure || type === :axis || type === :axis_3d
         return Dict()
     else
@@ -334,7 +341,7 @@ function Spline(
     on(_ -> calc_points!(spline), spline.knots)
     on(spline.points[begin]) do _
         # TODO detect size change and adjust only then
-        adjust_knots!(spline)
+        # adjust_knots!(spline)
         adjust_sizes!(spline)
         calc_points!(spline)
     end
@@ -469,23 +476,56 @@ function calc_point(
     return calc_point(spline.knots[], spline.degree[], index, x)
 end
 
-# TODO separate from spline
-function calc_points!(spline::Spline)
-    @views @inbounds for dim in eachindex(spline.line)
-        line, points, ts = spline.line[dim][], spline.points[dim][], spline.ts[]
-        fill!(line, zero(typeof(spline).parameters[1]))
-        line[begin] += points[begin]
-        for i in eachindex(points)
-            line .+=
-                points[i] * calc_point.((spline.knots[],), spline.degree[], i, ts)
-        end
-        # TODO proper knots handling
-        # currently there is not proper support for duplicated knots
-        # adjusted_end = length(spline.knots[]) - spline.degree[] - 1
-        # for i in length(points)+1:adjusted_end
-        #     line .+= points[end] * calc_point.((spline,), i, ts)
-        # end
+function calc_points!(
+    degree::Integer,
+    knots::AbstractVector{<:Real},
+    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N,
+    ts::AbstractVector{<:Real},
+    line::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N,
+)
+    @views @inbounds for dim in eachindex(line)
+        calc_points!(
+            degree,
+            knots,
+            points[dim][],
+            ts,
+            line[dim][],
+        )
     end
+end
+
+function calc_points!(
+    degree::Integer,
+    knots::AbstractVector{<:Real},
+    points::AbstractVector{<:Real},
+    ts::AbstractVector{<:Real},
+    line::AbstractVector{<:Real},
+)
+    @views @inbounds begin
+        line, points, ts = line, points, ts
+        fill!(line, zero(typeof(line).parameters[1]))
+        line[begin] += points[begin]
+        j = 1
+        adjusted_end = length(knots) - degree - 1
+        for i in 1:adjusted_end
+            line .+= points[j] * calc_point.((knots,), degree, i, ts)
+            knot = i + degree
+            if knot >= adjusted_end ||
+                knots[knot] != knots[knot+1]
+                j += 1
+            end
+        end
+    end
+end
+
+function calc_points!(spline::Spline)
+    calc_points!(
+        spline.degree[],
+        spline.knots[],
+        spline.points,
+        spline.ts[],
+        spline.line,
+    )
     notify.(spline.line)
 end
 
@@ -534,19 +574,34 @@ end
 #= drawings {{{=#
 
 function draw_splines(
-    xs::Vector{<:Real},
-    degree::Integer=DEFAULT_DEGREE,
+    xs::Union{AbstractVector{<:Real},Nothing}=nothing,
+    degree_or_knots::Union{Integer,AbstractVector{<:Real}}=DEFAULT_DEGREE,
     accuracy::Integer=DEFAULT_ACCURACY;
     fig_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     ax_kwargs::Union{Dict,NamedTuple,Nothing}=nothing,
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
-    fig = Figure(; default_kwargs(fig_kwargs, :figure)...)
-    ax = Axis(fig[1, 1]; default_kwargs(ax_kwargs, :axis)...)
-    step = (maximum(xs) - minimum(xs)) / (accuracy - 1)
-    range = minimum(xs):step:maximum(xs)
-    knots = get_knots(xs, degree)
-    for i in 1:length(xs)+degree-1
+    fig = Figure(; default_kwargs(:figure, fig_kwargs)...)
+    ax = Axis(fig[1, 1]; default_kwargs(:axis, ax_kwargs)...)
+    if degree_or_knots isa AbstractVector
+        degree = 0
+        for e in degree_or_knots[begin+1:end]
+            if e != degree_or_knots[begin]
+                break
+            end
+            degree += 1
+        end
+        knots = degree_or_knots
+    else
+        if xs === nothing
+            error("Incorrect values")
+        end
+        degree = degree_or_knots
+        knots = get_knots(xs, degree_or_knots)
+    end
+    step = (maximum(knots) - minimum(knots)) / (accuracy - 1)
+    range = minimum(knots):step:maximum(knots)
+    for i in 1:length(knots)-degree-1
         values = calc_point.((knots,), degree, i, range)
         if i == 1
             values[begin] += 1
@@ -586,7 +641,7 @@ struct SplinePlane{R<:Real} <: AbstractPlane{R}
 end
 
 function SplinePlane(
-    coeffs::AbstractMatrix{<:Real};
+    coeffs::Union{AbstractMatrix{<:Real},Observable{AbstractMatrix{<:Real}}};
     accuracy::NTuple{2,Integer}=DEFAULT_PLANE_ACCURACY,
     degree::NTuple{2,Integer}=DEFAULT_PLANE_DEGREE,
 )
@@ -594,8 +649,11 @@ function SplinePlane(
     if accuracy < size(coeffs)
         error("Not enough output to fit coefficients")
     end
+    if coeffs isa AbstractMatrix
+        coeffs = Observable(coeffs)
+    end
     plane = SplinePlane(
-        Observable(coeffs),
+        coeffs,
         Observable(accuracy),
         Observable(degree),
         tuple((Vector{R}(undef, 0) for _ in 1:2)...),
@@ -917,6 +975,13 @@ function StaticDemo!(
             plane.plane;
             default_kwargs(:contour_3d, plot_kwargs, plane.ts[begin])...
         )
+    elseif plot_type == :wireframe
+        plt = wireframe!(
+            ax,
+            plane.ts...,
+            plane.plane;
+            default_kwargs(:wireframe, plot_kwargs, plane.plane)...
+        )
     elseif plot_type == :scatter
         plt = scatter!(
             ax,
@@ -1060,7 +1125,7 @@ function Demo(
         plot_kwargs=plane_plot_kwargs,
         plot_type,
     )
-    ax = Axis(demo.fig[1, 2]; default_kwargs(ax_kwargs, :axis)...)
+    ax = Axis(demo.fig[1, 2]; default_kwargs(:axis, ax_kwargs)...)
     StaticDemo!(
         demo.ax,
         line;
@@ -1085,7 +1150,7 @@ function EditablePlaneDemo(
     plot_kwargs::Union{Dict,NamedTuple,Nothing}=DEFAULT_INDICATOR,
 )
     fig = Figure(; (fig_kwargs === nothing ? Dict() : fig_kwargs)...)
-    ax = Axis3(fig[1, 1]; default_kwargs(ax_kwargs, :axis_3d)...)
+    ax = Axis3(fig[1, 1]; default_kwargs(:axis_3d, ax_kwargs)...)
     # TODO demo with modifiable points in 3d
     # TODO may be better to have points in separate plot
     # axs = (Axis3(fig[1, 1]), Axis3(fig[1, 2]))
