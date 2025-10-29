@@ -49,11 +49,14 @@ function bitmap_terrain(
 
     splines = Array{R}.(undef, degree .+ 1, elements, elements)
     coeffs = Matrix{R}(undef, elements)
+    # all below had .+1 to precision
     GRAY = Matrix{R}(undef, prec)
     result = Matrix{R}(undef, prec) # Z
     temp = Matrix{R}(undef, prec)
-    ts = Vector{R}.(undef, precision)
-    ts = adjust_ts!.(ts, precision, knot_vector)
+    ts = Vector{R}.(undef, prec)
+    ts = adjust_ts!.(ts, prec, knot_vector)
+    xspline = Vector{R}(undef, prec[X]),
+    ysplines = Matrix{R}(undef, prec)
 
     for D in [Y, X]
         for e in 1:elements[D]
@@ -149,6 +152,21 @@ function bitmap_terrain(
 
 
 
+    # TODO WTF
+    # % Helper subroutine for integration over bitmap
+    # function val=bitmp(M,x,y)
+    #   val = zeros(size(x));
+    #   for i=1:size(x,1)
+    #     for j=1:size(x,1)
+    #       val(i,j)=M(xx(x(1,i)),yy(y(1,j)));
+    #     end
+    #   end
+    # end
+    # this boils down to single number
+    # bitmp(M,x,y) = M[(
+    #     res.(size(bitmap), (a -> a[begin]).((x, y)))
+    # )...]
+
     # % Integral BITMAP(x,y) B^x_k(x) B^y_l(y)
     # % loop over elements on x axis
     # for ex = 1:elementsx;
@@ -198,119 +216,41 @@ function bitmap_terrain(
     #   end
     # end
 
-    RRx, GGx, BBx = solve_direction(A, FR, FG, FB)
-    RRy, GGy, BBy = solve_direction(
-        A,
-        transpose(FR),
-        transpose(FG),
-        transpose(FB),
+    RR, GG, BB = solve_direction(A[X], FR, FG, FB)
+    RR, GG, BB = solve_direction(
+        A[Y],
+        transpose(RR),
+        transpose(GG),
+        transpose(BB),
     )
-
-    # % reconstruction of image
-    # % set zero to reconstructed image matrices
-    # R1 = zeros(ix,iy);
-    # G1 = zeros(ix,iy);
-    # B1 = zeros(ix,iy);
-
-
-    # funx_tab = zeros(nx,ix);
-    # funy_tab = zeros(ny,iy);
-
-    # % precache basis functions values
-    # % loop over basis functions
-    # for bi = 1:nx
-    #   % loop over nonzero pixels over given function
-    #   for i=xx(knot_vectorx(bi)):xx(knot_vectorx(bi+px+1))
-    #     % scale coordinates [1-width] -> [0-1]
-    #     ii = (i-1)/(ix-1);
-    #     % B^x_i(x)
-    #     funx_tab(bi,i) = compute_spline(knot_vectorx,px,bi,ii);
-    #   end
-    # end
-
-    # % loop over basis functions
-    # for bj = 1:ny
-    #   % loop over nonzero pixels over given function
-    #   for j=yy(knot_vectory(bj)):yy(knot_vectory(bj+py+1))  
-    #     % scale coordinates [1-height] -> [0-1]
-    #     jj = (j-1)/(iy-1);
-    #     % B^y_j(y)
-    #     funy_tab(bj,j) = compute_spline(knot_vectory,py,bj,jj);
-    #   end
-    # end
-
-    # %RR is 1:nx, GRAY is 1:precision
-    # GRAY=zeros(precision+1,precision+1);
-    # if nx==precision
-    #   for i=1:precision
-    #     for j=1:precision
-    #       GRAY(i,j)=255.0-(0.3*RR(i,j)+0.59*GG(i,j)+0.11*BB(i,j));
-    #     end
-    #   end
-    # else
-    #   for i=1:precision
-    #     for j=1:precision
-    #       i1 = floor((i-1)/(floor(precision/nx)))+1;
-    #       if(i1>nx)
-    #         i1=nx;
-    #       end
-    #       j1 = floor((j-1)/(floor(precision/ny)))+1;
-    #       if(j1>ny)
-    #         j1=ny;
-    #       end
-    #       GRAY(i,j)=255.0-(0.3*RR(i1,j1)+0.59*GG(i1,j1)+0.11*BB(i1,j1));
-    #     end
-    #   end
-    # end
+    RR, BB, GG = transpose.((RR, GG, BB))
 
     if ns == prec
+        GRAY .= gray.(RR, GG, BB)
+    else
+        for i in 1:size(GRAY)[X]
+            for j in 1:size(GRAY)[Y]
+                i1 = @. floor(((j, i) - 1) / floor(precision / ns)) + 1
+                GRAY[j, i] = gray((a -> a[i1...]).(RR, GG, BB)...)
+            end
+        end
     end
-    GRAY[prec[1]+1, :] = GRAY[prec[1], :]
-    GRAY[:, prec[2]+1] = GRAY[:, prec[2]]
-
-    # hold on
-    # Z=zeros(precision+1,precision+1);
-    # for i=1:nx
-    #   %compute values of 
-    #   vx=compute_spline(knot_vectorx,px,i,X);
-    #   for j=1:ny
-    #     vy=compute_spline(knot_vectory,py,j,Y);
-    #     %vx has all the values of B^x_{i,p} over entire domain
-    #     %vy has all the values of B^x_{j,p} over entire domain
-    #     Z=Z+vx.*vy.*GRAY;
-    #   end
-    # end
+    # GRAY[prec[Y]+1, :] = GRAY[prec[Y], :]
+    # GRAY[:, prec[X]+1] = GRAY[:, prec[X]]
 
     # Should suffice
     update_plane!(
         result,
         coeffs,
-        [], # TODO xspline
-        [], # TODO ysplines
+        xspline,
+        ysplines,
         temp,
         ts,
         knot_vector,
         degree,
     )
-
     return result
 end
-
-# % Subroutine to solve one direction as 1D problem with multiple RHS
-# function [RR,GG,BB]=solve_direction(A,FR,FG,FB)
-#   % compute LU factorization of A  matrix
-#   [L,U,P,Q] = lu(A);
-#   Q1=Q';
-#   RR = zeros(size(FR,1),size(FR,2));
-#   GG = zeros(size(FG,1),size(FG,2));
-#   BB = zeros(size(FB,1),size(FB,2));
-#   % loop over multiple RHS and color components
-#   for i=1:size(FR,2)
-#     RR(:,i)=solveRHS(L,U,P,Q1,FR(:,i));  
-#     GG(:,i)=solveRHS(L,U,P,Q1,FG(:,i));  
-#     BB(:,i)=solveRHS(L,U,P,Q1,FB(:,i));  
-#   end
-# end
 
 # TODO does this work
 function solve_direction(
@@ -339,24 +279,12 @@ function solveRHS(
     return transpose(input.Q) \ (input.U \ (input.L \ (input.P .* b)))
 end
 
-# xx, yy
 function res(
     img_size::Integer,
     coord::Real,
 )
     return floor((img_size - 1) * coord + 1)
 end
-
-# TODO
-# % Helper subroutine for integration over bitmap
-# function val=bitmp(M,x,y)
-#   val = zeros(size(x));
-#   for i=1:size(x,1)
-#     for j=1:size(x,1)
-#       val(i,j)=M(xx(x(1,i)),yy(y(1,j)));
-#     end
-#   end
-# end
 
 function dofs_on_element(
     knot_vector::AbstractVector{<:Real},
