@@ -424,6 +424,16 @@ function adjust_ts!(
 end
 
 function adjust_ts!(
+    ts::AbstractVector{<:Real},
+    accuracy::Integer,
+    ends::NTuple{2,Real},
+)
+    resize!(ts, accuracy)
+    step = ends[2] / (accuracy - 1)
+    ts .= 0:step:ends[1]
+end
+
+function adjust_ts!(
     ts::Union{Observable{<:AbstractVector{<:Real}},AbstractVector{<:Real}},
     accuracy::Union{Integer,Observable{<:Integer}},
     knots::Union{Observable{<:AbstractVector{<:Real}},AbstractVector{<:Real}},
@@ -795,12 +805,12 @@ function register_actions!(demo::Demo)
     on(
         on_mouse_button(demo),
         events(demo.ax).mousebutton,
-        priority=1
+        priority=5
     )
     on(
         on_mouse_position(demo),
         events(demo.ax).mouseposition,
-        priority=1
+        priority=5
     )
 end
 
