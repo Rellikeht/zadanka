@@ -392,6 +392,16 @@ function get_knots!(
     @views fill!(knots[end-degree+1:end], length - degree)
 end
 
+function get_knots!(
+    knots::AbstractVector{<:Real},
+    degree::Integer,
+)
+    len = length(knots) - degree - 1
+    @views fill!(knots[begin:begin+degree], 0)
+    knots[begin+degree+1:end-degree] = 1:len-degree
+    @views fill!(knots[end-degree+1:end], len - degree)
+end
+
 function adjust_knots!(
     knots::AbstractVector{<:Real},
     points::Integer,
