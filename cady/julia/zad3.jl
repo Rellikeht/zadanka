@@ -383,25 +383,44 @@ function get_knots(
 end
 
 function get_knots!(
-    knots::AbstractVector{R},
-    length::R,
+    knots::AbstractVector{<:Real},
+    length::Real,
     degree::Integer,
-) where {R<:Real}
+)
     @views fill!(knots[begin:begin+degree], 0)
     knots[begin+degree+1:end-degree] = 1:length-degree
     @views fill!(knots[end-degree+1:end], length - degree)
 end
 
-function adjust_knots!(spline::Spline)
-    R = typeof(spline).parameters[1]
+function adjust_knots!(
+    knots::AbstractVector{<:Real},
+    points::Integer,
+    degree::Integer,
+)
     resize!(
-        spline.knots[],
-        length(spline.points[begin][]) + spline.degree[] + 1
+        knots,
+        points + degree + 1
     )
     get_knots!(
+        knots,
+        points,
+        degree
+    )
+end
+
+function adjust_knots!(
+    knots::AbstractVector{<:Real},
+    points::AbstractVector{<:Real},
+    degree::Integer,
+)
+    adjust_knots!(knots, length(points), degree)
+end
+
+function adjust_knots!(spline::Spline)
+    adjust_knots!(
         spline.knots[],
-        R(length(spline.points[begin][])),
-        spline.degree[]
+        spline.points[begin][],
+        spline.degree[],
     )
 end
 

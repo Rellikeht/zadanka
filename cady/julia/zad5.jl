@@ -10,7 +10,7 @@ using LinearAlgebra
 
 const DEFAULT_BITMAP_ELEMENTS = (50, 50)
 const DEFAULT_BITMAP_DEGREE = (2, 2)
-const X = 2, Y = 1
+const X, Y = 2, 1
 
 GLMakie.activate!(framerate=60)
 
@@ -38,8 +38,15 @@ function bitmap_terrain(
     R = typeof(bitmap).parameters[1]
     prec = @. 2 * (elements + degree) + 1
 
-    knot_vector = Vector{R}(undef, 0), Vector{R}(undef, 0)
-    get_knots!.(knot_vector, elements, degree)
+    knot_vector = tuple((
+        [
+            zeros(R, degree[dim]);
+            [R(i) for i in 0:elements[dim]];
+            fill(R(elements[dim]), degree[dim])
+        ]
+        for dim in [Y, X]
+    )...)
+    println(knot_vector)
     ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
     A = (s -> sparse(R, I, s, s)).(elements)
     FR = Matrix{R}(undef, elements)
@@ -55,7 +62,7 @@ function bitmap_terrain(
     temp = Matrix{R}(undef, prec)
     ts = Vector{R}.(undef, prec)
     ts = adjust_ts!.(ts, prec, knot_vector)
-    xspline = Vector{R}(undef, prec[X]),
+    xspline = Vector{R}(undef, prec[X])
     ysplines = Matrix{R}(undef, prec)
 
     for D in [Y, X]
@@ -75,81 +82,28 @@ function bitmap_terrain(
         end
     end
 
-    # % integral B^x_i(x) B^y_j(y) B^x_k(x) B^y_l(y)
-    # % (i,k=1,...,Nx; j,l=1,...,Ny)px
-    # % loop over elements over x axis
-    # for ex = 1:elementsx;
-    #   % range of nonzero functions over element
-    #   [xl,xh] = dofs_on_element(knot_vectorx,px,ex);
-    #   % range of element (left and right edge over x axis)
-    #   [ex_bound_l,ex_bound_h] = element_boundary(knot_vectorx,px,ex);
-    #   % Jacobian = size of element
-    #   J = ex_bound_h - ex_bound_l;
-    #   % quadrature points over element (over x axis)
-    #   qpx = quad_points(ex_bound_l,ex_bound_h,px+1);
-    #   % quadrature weights over element (over x axis)
-    #   qwx = quad_weights(ex_bound_l,ex_bound_h,px+1);
-    #   % loop over nonzero functions over element
-    #   for bi = xl:xh
-    #     for bk = xl:xh
-    #       % loop over quadrature points
-    #       for iqx = 1:size(qpx,2)
-    #         % B^x_k(x)
-    #         funk = splinex(ex,bk,iqx);
-    #         % B^x_i(x)
-    #         funi = splinex(ex,bi,iqx);
-    #         % B^x_i(x) B^y_j(y) B^x_k(x) B^y_l(y)
-    #         fun = funi*funk;
-
-    #         % integral z B^x_i(x) B^y_j(y) B^x_k(x) B^y_l(y)
-    #         % (i,k=1,...,Nx; j,l=1,...,Ny)
-    #         int = fun*qwx(iqx)*J;
-    #         if (int~=0)
-    #           Ax(bi,bk) = Ax(bi,bk) + int;
-    #         end
-    #       end
-    #     end
-    #   end
-    # end
-
-
-    # % integral B^x_i(x) B^y_j(y) B^x_k(x) B^y_l(y)
-    # % (i,k=1,...,Nx; j,l=1,...,Ny)
-    # % loop over elements on y axis
-    # for ey = 1:elementsy
-    #   % range of nonzero functions over element
-    #   [yl,yh] = dofs_on_element(knot_vectory,py,ey);
-    #   % range of element (left and right edge over y axis)
-    #   [ey_bound_l,ey_bound_h] = element_boundary(knot_vectory,py,ey);
-    #   % Jacobian = size of element
-    #   J = ey_bound_h - ey_bound_l;
-    #   % quadrature points over element (over y axis)
-    #   qpy = quad_points(ey_bound_l,ey_bound_h,py+1);
-    #   % quadrature weights over element (over y axis)
-    #   qwy = quad_weights(ey_bound_l,ey_bound_h,py+1);
-    #   % loop over nonzero functions over element
-    #   for bj = yl:yh
-    #     for bl = yl:yh
-    #       % loop over quadrature points      
-    #       for iqy = 1:size(qpy,2)
-    #         % B^y_l(y)
-    #         funl = spliney(ey,bl,iqy);
-    #         % B^y_j(y)
-    #         funj = spliney(ey,bj,iqy);
-    #         % B^x_i(x) B^y_j(y) B^x_k(x) B^y_l(y)
-    #         fun = funj*funl;
-
-    #         % integral z B^x_i(x) B^y_j(y) B^x_k(x) B^y_l(y)
-    #         % (i,k=1,...,Nx; j,l=1,...,Ny)
-    #         int = fun*qwy(iqy)*J;
-    #         if (int~=0)
-    #           Ay(bj,bl) = Ay(bj,bl) + int;
-    #         end
-    #       end
-    #     end
-    #   end
-    # end
-
+    for dim in [Y, X]
+        for el in 1:elements[dim]
+            xl, xh = dofs_on_element(knot_vector[dim], degree[dim], el)
+            ex_bound_l, ex_bound_h = element_boundary(
+                knot_vector[dim],
+                degree[dim],
+                el,
+            )
+            J = ex_bound_h - ex_bound_l
+            qp = quad_points(ex_bound_l, ex_bound_h, degree[dim] + 1)
+            qw = quad_points(ex_bound_l, ex_bound_h, degree[dim] + 1)
+            for bi in xl:xh
+                for bk in xl:xh
+                    for iq in 1:size(qp)
+                        A[dim][bk, bi] += qw[iq] * J *
+                                          splines[dim][iq, el, bi] *
+                                          splines[dim][iq, el, bk]
+                    end
+                end
+            end
+        end
+    end
 
 
     # TODO WTF
@@ -167,54 +121,55 @@ function bitmap_terrain(
     #     res.(size(bitmap), (a -> a[begin]).((x, y)))
     # )...]
 
-    # % Integral BITMAP(x,y) B^x_k(x) B^y_l(y)
-    # % loop over elements on x axis
-    # for ex = 1:elementsx;
-    #   % range of nonzero functions over element
-    #   [xl,xh] = dofs_on_element(knot_vectorx,px,ex);
-    #   % range of element (left and right edge over x axis)
-    #   [ex_bound_l,ex_bound_h] = element_boundary(knot_vectorx,px,ex);
-    #   % loop over elements on y axis
-    #   for ey = 1:elementsy
-    #     % range of nonzero functions over element
-    #     [yl,yh] = dofs_on_element(knot_vectory,py,ey);
-    #     % range of element (left and right edge over y axis)
-    #     [ey_bound_l,ey_bound_h] = element_boundary(knot_vectory,py,ey);
-    #     % Jacobian = size of element
-    #     Jx = ex_bound_h - ex_bound_l;
-    #     Jy = ey_bound_h - ey_bound_l;
-    #     J = Jx * Jy;
-    #     % quadrature points over element (over x axis)
-    #     qpx = quad_points(ex_bound_l,ex_bound_h,px+1);
-    #     % quadrature points over element (over y axis)
-    #     qpy = quad_points(ey_bound_l,ey_bound_h,py+1);
-    #     % quadrature weights over element (over x axis)
-    #     qwx = quad_weights(ex_bound_l,ex_bound_h,px+1);
-    #     % quadrature weights over element (over y axis)
-    #     qwy = quad_weights(ey_bound_l,ey_bound_h,py+1);
-    #     % loop over nonzero functions over element
-    #     for bk = xl:xh
-    #       for bl = yl:yh  
-    #         % loop over quadrature points      
-    #         for iqx = 1:size(qpx,2)
-    #           for iqy = 1:size(qpy,2)
-    #             % B^x_k(x)
-    #             funk = splinex(ex,bk,iqx);
-    #             % B^y_l(y)
-    #             funl = spliney(ey,bl,iqy);
-    #             % integral BITMAP(x,y) B^x_k(x) B^y_l(y) over RGB components
-    #             intR = funk*funl*qwx(iqx)*qwy(iqy)*J*bitmp(R,qpx(iqx),qpy(iqy));
-    #             intG = funk*funl*qwx(iqx)*qwy(iqy)*J*bitmp(G,qpx(iqx),qpy(iqy));
-    #             intB = funk*funl*qwx(iqx)*qwy(iqy)*J*bitmp(B,qpx(iqx),qpy(iqy));
-    #             FRx(bk,bl) = FRx(bk,bl) + intR;
-    #             FGx(bk,bl) = FGx(bk,bl) + intG;
-    #             FBx(bk,bl) = FBx(bk,bl) + intB;
-    #           end
-    #         end
-    #       end
-    #     end
-    #   end
-    # end
+    for ex in 1:elements[X]
+        xl, xh = dofs_on_element(knot_vector[X], degree[X], ex)
+        ex_bound_l, ex_bound_h = element_boundary(
+            knot_vector[X],
+            degree[X],
+            ex,
+        )
+        qpx = quad_points(ex_bound_l, ex_bound_h, degree[X] + 1)
+        qwx = quad_points(ex_bound_l, ex_bound_h, degree[X] + 1)
+        for ey in 1:elements[Y]
+            yl, yh = dofs_on_element(knot_vector[Y], degree[Y], ey)
+            ey_bound_l, ey_bound_h = element_boundary(
+                knot_vector[Y],
+                degree[Y],
+                ey,
+            )
+            qpy = quad_points(ey_bound_l, ey_bound_h, degree[Y] + 1)
+            qwy = quad_points(ey_bound_l, ey_bound_h, degree[Y] + 1)
+            J = (ex_bound_h - ex_bound_l) * (ey_bound_h - ey_bound_l)
+            for bk in xl:xh
+                for bl in xl:xh
+                    for iqx in 1:size(qpx)
+                        for iqy in 1:size(qpy)
+                            fun = splines[X][iqx, bk, ex] *
+                                  splines[X][iqy, bl, ey]
+                            FR[bl, bk] +=
+                                fun * qwx[iqx] * qwy[iqy] * J *
+                                R[(res.(
+                                    size(bitmap),
+                                    (a -> a[begin]).((qpx[iqx], qpy[iqy]))
+                                ))...]
+                            FG[bl, bk] +=
+                                fun * qwx[iqx] * qwy[iqy] * J *
+                                R[(res.(
+                                    size(bitmap),
+                                    (a -> a[begin]).((qpx[iqx], qpy[iqy]))
+                                ))...]
+                            FB[bl, bk] +=
+                                fun * qwx[iqx] * qwy[iqy] * J *
+                                R[(res.(
+                                    size(bitmap),
+                                    (a -> a[begin]).((qpx[iqx], qpy[iqy]))
+                                ))...]
+                        end
+                    end
+                end
+            end
+        end
+    end
 
     RR, GG, BB = solve_direction(A[X], FR, FG, FB)
     RR, GG, BB = solve_direction(
@@ -288,18 +243,19 @@ end
 
 function dofs_on_element(
     knot_vector::AbstractVector{<:Real},
-    p::Integer,
+    degree::Integer,
     elem_number::Integer,
 )
-    return (0, p) .+ first_dof_on_element(knot_vector, p, elem_number)
+    return (0, degree) .+
+           first_dof_on_element(knot_vector, degree, elem_number)
 end
 
 function first_dof_on_element(
     knot_vector::AbstractVector{<:Real},
-    p::Integer,
+    degree::Integer,
     elem_number::Integer,
 )
-    low, _ = element_boundary(knot_vector, p, elem_number)
+    low, _ = element_boundary(knot_vector, degree, elem_number)
     return findfirst(x -> x == low, knot_vector)
 end
 
@@ -349,11 +305,11 @@ function quad_points(
         R.([-1, 1]) ./ R(3),
         [-1, 0, 1] .* sqrt(R(3) / R(5)),
         [-1, -1, 1, 1] .* sqrt.(
-            R(3) .* [1, -1, -1, 1] .*
-            R(2) .* sqrt(R(6) / R(5))
+            R(3) .- [1, -1, -1, 1] .*
+                    R(2) .* sqrt(R(6) / R(5))
         ) / R(7),
         [-1, -1, 0, 1, 1] .* sqrt.(
-            R(5) .* [1, -1, 0, 1, -1] .* sqrt(R(10) / R(7))
+            R(5) .- [1, -1, 0, 1, -1] .* sqrt(R(10) / R(7))
         )
     ]
     if !(k in eachindex(POINTS))
