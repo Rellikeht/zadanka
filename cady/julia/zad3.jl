@@ -770,9 +770,11 @@ function calc_points!(plane::SplinePlane)
     yacc, xacc = plane.accuracy[]
     ydeg, xdeg = plane.degree[]
     sy, sx = size(plane.coeffs[])
-    resize!.(plane.knots, (sx, sy) .+ plane.degree[] .+ 1)
-    get_knots!.(plane.knots, R.((sx, sy)), plane.degree[])
+    resize!.(plane.knots, (sx, sy) .+ plane.degree[] .* 2)
+    get_knots!.(plane.knots, R.((sx, sy) .+ plane.degree[] .- 1), plane.degree[])
     adjust_ts!.(plane.ts, plane.accuracy[], plane.knots)
+    (v -> v[] .+= 1).(plane.ts)
+    (v -> v .+= 1).(plane.knots)
     if size(plane.plane[]) != (yacc, xacc)
         plane.plane[] = zeros((yacc, xacc))
     else

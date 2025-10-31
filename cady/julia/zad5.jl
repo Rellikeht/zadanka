@@ -15,12 +15,14 @@ const X, Y = 2, 1
 
 GLMakie.activate!(framerate=60)
 
+# toplevel definitions {{{
+
 function bitmap_terrain(
     bitmap::String;
     elements::NTuple{2,Integer}=DEFAULT_BITMAP_ELEMENTS,
     degree::NTuple{2,Integer}=DEFAULT_BITMAP_DEGREE,
 )
-    bitmap_terrain(abs(load(bitmap)); elements, degree)
+    bitmap_terrain(transpose(abs(load(bitmap))); elements, degree)
 end
 
 function bitmap_terrain(
@@ -28,18 +30,7 @@ function bitmap_terrain(
     elements::NTuple{2,Integer}=DEFAULT_BITMAP_ELEMENTS,
     degree::NTuple{2,Integer}=DEFAULT_BITMAP_DEGREE,
 )
-    # TODO
-end
-
-function bitmap_terrain(
-    bitmap::AbstractMatrix{<:AbstractRGB};
-    elements::NTuple{2,Integer}=DEFAULT_BITMAP_ELEMENTS,
-    degree::NTuple{2,Integer}=DEFAULT_BITMAP_DEGREE,
-)
-    # R = typeof(bitmap).parameters[1]
-    R = Float64
-    prec = @. 2 * (elements + degree) + 1
-
+    R = typeof(bitmap).parameters[1]
     knot_vector = tuple((
         [
             zeros(R, degree[dim]);
@@ -50,21 +41,81 @@ function bitmap_terrain(
     )...)
     ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
     A = (s -> sparse(R, I, s, s)).(ns)
-    FR = zeros(ns)
-    FG = deepcopy(FR)
-    FB = deepcopy(FR)
-    red = (c -> c.r).(bitmap)
-    green = (c -> c.g).(bitmap)
-    blue = (c -> c.b).(bitmap)
+    F = zeros(ns)
     splines = zeros.(degree .+ 1, ns, elements .+ 1)
-    GRAY = Matrix{R}(undef, prec) # coeffs
+    return bitmap_terrain(
+        bitmap,
+        elements,
+        degree,
+        knot_vector,
+        A,
+        F,
+        splines,
+    )
+end
+
+function bitmap_terrain(
+    bitmap::AbstractMatrix{<:AbstractRGB};
+    elements::NTuple{2,Integer}=DEFAULT_BITMAP_ELEMENTS,
+    degree::NTuple{2,Integer}=DEFAULT_BITMAP_DEGREE,
+)
+    R = Float64
+    knot_vector = tuple((
+        [
+            zeros(R, degree[dim]);
+            [R(i) for i in 0:elements[dim]];
+            fill(R(elements[dim]), degree[dim])
+        ] ./ elements[dim]
+        for dim in [Y, X]
+    )...)
+    ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
+    F = zeros(ns)
+    splines = zeros.(degree .+ 1, ns, elements .+ 1)
+    red = (c -> c.r |> R).(bitmap)
+    green = (c -> c.g |> R).(bitmap)
+    blue = (c -> c.b |> R).(bitmap)
+    result = [
+        Matrix{R}(undef, (0, 0)) for _ in 1:3
+    ]
+    for (i, color) in enumerate([red, green, blue])
+        A = (s -> sparse(R, I, s, s)).(ns)
+        fill!(F, R(0))
+        fill!.(splines, R(0))
+        result[i] = bitmap_terrain(
+            color,
+            elements,
+            degree,
+            knot_vector,
+            A,
+            F,
+            splines,
+        )
+    end
+    return tuple(result...)
+end
+
+#  }}}
+
+# main calculations {{{
+
+function bitmap_terrain(
+    bitmap::AbstractMatrix{<:Real},
+    elements::NTuple{2,Integer},
+    degree::NTuple{2,Integer},
+    knot_vector::NTuple{2,AbstractVector{<:Real}},
+    A::NTuple{2,AbstractSparseMatrix},
+    F::AbstractMatrix,
+    splines::NTuple{2,AbstractArray{<:Real}},
+)
+    R = typeof(bitmap).parameters[1]
+    prec = @. 2 * (elements + degree) + 1
+    ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
 
     for D in [Y, X]
         for e in 1:elements[D]
             low, high = dofs_on_element(knot_vector[D], degree[D], e)
             bounds = element_boundary(knot_vector[D], degree[D], e)
             qp = quad_points(bounds..., degree[D] + 1)
-            # qw = quad_weights(bounds..., degree[D] + 1)
             for bi in low:high
                 splines[D][:, bi, e] = calc_point.(
                     (knot_vector[D],),
@@ -125,10 +176,8 @@ function bitmap_terrain(
                         for iqy in eachindex(qpy)
                             fun = splines[X][iqx, bk, ex] *
                                   splines[X][iqy, bl, ey]
-                            color_ids = res.(size(bitmap), (a -> a[begin]).((qpy[iqy], qpx[iqx])))
-                            FR[bl, bk] += fun * qwx[iqx] * qwy[iqy] * J * red[color_ids...]
-                            FG[bl, bk] += fun * qwx[iqx] * qwy[iqy] * J * green[color_ids...]
-                            FB[bl, bk] += fun * qwx[iqx] * qwy[iqy] * J * blue[color_ids...]
+                            ids = res.(size(bitmap), (a -> a[begin]).((qpy[iqy], qpx[iqx])))
+                            F[bl, bk] += fun * qwx[iqx] * qwy[iqy] * J * bitmap[ids...]
                         end
                     end
                 end
@@ -136,71 +185,42 @@ function bitmap_terrain(
         end
     end
 
-    RR, GG, BB = solve_direction(A[X], FR, FG, FB)
-    RR, GG, BB = solve_direction(
-        A[Y],
-        transpose(RR),
-        transpose(GG),
-        transpose(BB),
-    )
-    RR, GG, BB = transpose.((RR, GG, BB))
+    F = solve_direction(A[X], F)
+    F = transpose(F)
+    F = solve_direction(A[Y], F)
+    F = transpose(F)
     if ns == prec
-        GRAY .= gray.(RR, GG, BB)
+        result = deepcopy(F)
     else
-        for i in 1:size(GRAY)[X]
-            for j in 1:size(GRAY)[Y]
+        result = Matrix{R}(undef, prec)
+        for i in 1:size(result)[X]
+            for j in 1:size(result)[Y]
                 i1 = ((j, i) .- 1) ./ floor.(prec ./ ns)
                 i1 = Int.(floor.(i1) .+ 1)
                 i1 = (((a, b) -> minimum((a, b)))).(i1, ns)
-                GRAY[j, i] = gray((a -> a[i1...]).((RR, GG, BB))...)
+                result[j, i] = F[i1...]
             end
         end
     end
-    GRAY .*= 255
-    return GRAY
-
-    # result = Matrix{R}(undef, prec) # Z
-    # temp = Matrix{R}(undef, prec)
-    # # TODO too much .+1
-    # xspline = Vector{R}(undef, prec[X] + 1)
-    # ysplines = Matrix{R}(undef, prec .+ 1)
-    # ts = Vector{R}.(undef, prec)
-    # ts = adjust_ts!.(ts, prec, knot_vector)
-    # # TODO is this correct
-    # adjust_knots!.(knot_vector, prec .+ 1, degree)
-    # get_knots!.(knot_vector, degree)
-    #
-    # # TODO how to do this
-    # update_plane!(
-    #     result,
-    #     GRAY,
-    #     xspline,
-    #     ysplines,
-    #     temp,
-    #     ts,
-    #     knot_vector,
-    #     degree,
-    # )
-    # return result
+    result .*= 255
+    return result
 end
+
+#  }}}
+
+# helpers {{{
 
 function solve_direction(
     A::AbstractSparseMatrix,
-    FR,
-    FG,
-    FB,
+    F::AbstractMatrix,
 )
     R = typeof(A).parameters[1]
-    F = lu(A)
-    RR = zeros(R, size(FR))
-    GG = zeros(R, size(FG))
-    BB = zeros(R, size(FB))
-    for i in 1:size(FR)[2]
-        RR[:, i] = solveRHS(F, FR[:, i])
-        GG[:, i] = solveRHS(F, FG[:, i])
-        BB[:, i] = solveRHS(F, FB[:, i])
+    factorized = lu(A)
+    result = zeros(R, size(F))
+    for i in 1:size(F)[1]
+        result[i, :] = solveRHS(factorized, F[i, :])
     end
-    return RR, GG, BB
+    return result
 end
 
 function solveRHS(
@@ -277,7 +297,7 @@ function quad_points(
     b::R,
     k::Integer,
 ) where {R<:Real}
-    POINTS = [
+    POINTS = (
         R.([0]),
         R.([-1, 1]) ./ R(3),
         [-1, 0, 1] .* sqrt(R(3) / R(5)),
@@ -288,7 +308,7 @@ function quad_points(
         [-1, -1, 0, 1, 1] .* sqrt.(
             R(5) .- [1, -1, 0, 1, -1] .* sqrt(R(10) / R(7))
         )
-    ]
+    )
     if !(k in eachindex(POINTS))
         k = maximum(eachindex(POINTS))
     end
@@ -296,11 +316,18 @@ function quad_points(
 end
 
 function quad_weights(
-    _::R,
+    a::R,
     _::R,
     k::Integer,
 ) where {R<:Real}
-    WEIGHTS = [
+    return quad_weights(typeof(a), k)
+end
+
+function quad_weights(
+    ::Type{R},
+    k::Integer,
+) where {R<:Real}
+    WEIGHTS = (
         R.([2]),
         R.([1, 1]),
         R.([5, 8, 5]) ./ R(9),
@@ -309,12 +336,16 @@ function quad_weights(
             R.([322, 322, 512, 322, 322]) .+
             R(13) .* [-1, 1, 0, 1, -1] .* sqrt(R(70))
         ) ./ R(900)
-    ]
+    )
     if !(k in eachindex(WEIGHTS))
         k = maximum(eachindex(WEIGHTS))
     end
     return WEIGHTS[k]
 end
+
+#  }}}
+
+# colors {{{
 
 function gray(color...)
     return my_gray(color...)
@@ -347,3 +378,5 @@ end
 function orig_gray(color::Real...)
     orig_gray(color)
 end
+
+#  }}}
