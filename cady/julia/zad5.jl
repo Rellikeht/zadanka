@@ -5,7 +5,7 @@ using FileIO
 using Observables
 using Colors
 
-using SparseArrays # this is in base already
+using SparseArrays
 using LinearAlgebra
 
 const SparseFactorization = SparseArrays.UMFPACK.UmfpackLU
@@ -110,18 +110,21 @@ function bitmap_terrain(
     R = typeof(bitmap).parameters[1]
     prec = @. 2 * (elements + degree) + 1
     ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
+    qw = quad_weights.(R, degree .+ 1)
+    qcoeffsp = quad_points.(R, degree .+ 1)
+    qp = Vector{R}.(undef, length.(qcoeffsp))
 
     for D in [Y, X]
         for e in 1:elements[D]
             low, high = dofs_on_element(knot_vector[D], degree[D], e)
             bounds = element_boundary(knot_vector[D], degree[D], e)
-            qp = quad_points(bounds..., degree[D] + 1)
+            quad_points!(qp[D], bounds..., qcoeffsp[D])
             for bi in low:high
                 splines[D][:, bi, e] = calc_point.(
                     (knot_vector[D],),
                     (degree[D],),
                     (bi,),
-                    qp,
+                    qp[D],
                 )
             end
         end
@@ -136,12 +139,10 @@ function bitmap_terrain(
                 el,
             )
             J = ex_bound_h - ex_bound_l
-            qp = quad_points(ex_bound_l, ex_bound_h, degree[dim] + 1)
-            qw = quad_weights(ex_bound_l, ex_bound_h, degree[dim] + 1)
             for bi in xl:xh
                 for bk in xl:xh
-                    for iq in 1:length(qp)
-                        A[dim][bk, bi] += qw[iq] * J *
+                    for iq in 1:length(qw)
+                        A[dim][bk, bi] += qw[dim][iq] * J *
                                           splines[dim][iq, bi, el] *
                                           splines[dim][iq, bk, el]
                     end
@@ -150,7 +151,6 @@ function bitmap_terrain(
         end
     end
 
-
     for ex in 1:elements[X]
         xl, xh = dofs_on_element(knot_vector[X], degree[X], ex)
         ex_bound_l, ex_bound_h = element_boundary(
@@ -158,8 +158,7 @@ function bitmap_terrain(
             degree[X],
             ex,
         )
-        qpx = quad_points(ex_bound_l, ex_bound_h, degree[X] + 1)
-        qwx = quad_weights(ex_bound_l, ex_bound_h, degree[X] + 1)
+        quad_points!(qp[X], ex_bound_l, ex_bound_h, qcoeffsp[X])
         for ey in 1:elements[Y]
             yl, yh = dofs_on_element(knot_vector[Y], degree[Y], ey)
             ey_bound_l, ey_bound_h = element_boundary(
@@ -167,17 +166,16 @@ function bitmap_terrain(
                 degree[Y],
                 ey,
             )
-            qpy = quad_points(ey_bound_l, ey_bound_h, degree[Y] + 1)
-            qwy = quad_weights(ey_bound_l, ey_bound_h, degree[Y] + 1)
+            quad_points!(qp[Y], ey_bound_l, ey_bound_h, qcoeffsp[Y])
             J = (ex_bound_h - ex_bound_l) * (ey_bound_h - ey_bound_l)
             for bk in xl:xh
                 for bl in yl:yh
-                    for iqx in eachindex(qpx)
-                        for iqy in eachindex(qpy)
+                    for iqx in eachindex(qp[X])
+                        for iqy in eachindex(qp[Y])
                             fun = splines[X][iqx, bk, ex] *
                                   splines[X][iqy, bl, ey]
-                            ids = res.(size(bitmap), (a -> a[begin]).((qpy[iqy], qpx[iqx])))
-                            F[bl, bk] += fun * qwx[iqx] * qwy[iqy] * J * bitmap[ids...]
+                            ids = res.(size(bitmap), (a -> a[begin]).((qp[X][iqy], qp[Y][iqx])))
+                            F[bl, bk] += fun * qw[X][iqx] * qw[Y][iqy] * J * bitmap[ids...]
                         end
                     end
                 end
@@ -215,20 +213,13 @@ function solve_direction(
     F::AbstractMatrix,
 )
     R = typeof(A).parameters[1]
-    factorized = lu(A)
+    fact = lu(A)
+    Q, U, L, P = fact.q |> diagm, fact.U, fact.L, fact.p |> diagm
     result = zeros(R, size(F))
     for i in 1:size(F)[1]
-        result[i, :] = solveRHS(factorized, F[i, :])
+        result[i, :] = transpose(Q) \ (U \ (L \ (P * F[i, :])))
     end
     return result
-end
-
-function solveRHS(
-    input::Factorization,
-    b::AbstractVector{<:Real},
-)
-    Q, U, L, P = input.q |> diagm, input.U, input.L, input.p |> diagm
-    return transpose(Q) \ (U \ (L \ (P * b)))
 end
 
 function res(
@@ -243,7 +234,7 @@ function dofs_on_element(
     degree::Integer,
     elem_number::Integer,
 )
-    return (0, degree) .+
+    return (typeof(elem_number)(0), degree) .+
            first_dof_on_element(knot_vector, degree, elem_number)
 end
 
@@ -253,7 +244,8 @@ function first_dof_on_element(
     elem_number::Integer,
 )
     low, _ = element_boundary(knot_vector, degree, elem_number)
-    return findlast(x -> x == low, knot_vector) - degree
+    return (findlast(x -> x == low, knot_vector) - degree) |>
+           typeof(elem_number)
 end
 
 # % Finds lower and higher boundary of element
@@ -278,9 +270,9 @@ end
 
 function element_boundary(
     knots::AbstractVector{<:Real},
-    degree::Integer,
-    number::Integer,
-)
+    degree::I,
+    number::I,
+) where {I<:Integer}
     # TODO do this for general case with loops
     # k = degree+1
     # initial = knot_vector[k]
@@ -289,46 +281,33 @@ function element_boundary(
     #         k, initial = k+1, knot_vector[i]
     #     end
     # end
-    return knots[[number + degree, number + degree + 1]]
+    return (knots[number+degree], knots[number+degree+1])
 end
 
-function quad_points(
-    a::R,
-    b::R,
-    k::Integer,
+function get_points(
+    ::Type{R},
+    ::Val{:points},
 ) where {R<:Real}
-    POINTS = (
-        R.([0]),
+    return (
+        [R(0)],
         R.([-1, 1]) ./ R(3),
         [-1, 0, 1] .* sqrt(R(3) / R(5)),
         [-1, -1, 1, 1] .* sqrt.(
             R(3) .- [1, -1, -1, 1] .*
                     R(2) .* sqrt(R(6) / R(5))
-        ) / R(7),
+        ) ./ R(7),
         [-1, -1, 0, 1, 1] .* sqrt.(
             R(5) .- [1, -1, 0, 1, -1] .* sqrt(R(10) / R(7))
         )
     )
-    if !(k in eachindex(POINTS))
-        k = maximum(eachindex(POINTS))
-    end
-    return @. 0.5 * (a * (1 - POINTS[k]) + b * (POINTS[k] + 1))
 end
 
-function quad_weights(
-    a::R,
-    _::R,
-    k::Integer,
-) where {R<:Real}
-    return quad_weights(typeof(a), k)
-end
-
-function quad_weights(
+function get_points(
     ::Type{R},
-    k::Integer,
+    ::Val{:weights},
 ) where {R<:Real}
-    WEIGHTS = (
-        R.([2]),
+    return (
+        [R(2)],
         R.([1, 1]),
         R.([5, 8, 5]) ./ R(9),
         R(18) .+ [-1, 1, 1, -1] .* sqrt(R(30)) ./ R(36),
@@ -337,10 +316,47 @@ function quad_weights(
             R(13) .* [-1, 1, 0, 1, -1] .* sqrt(R(70))
         ) ./ R(900)
     )
-    if !(k in eachindex(WEIGHTS))
-        k = maximum(eachindex(WEIGHTS))
+end
+
+function quad_points(
+    ::Type{R},
+    k::Integer,
+) where {R<:Real}
+    points = get_points(R, Val(:points))
+    if !(k in eachindex(points))
+        k = maximum(eachindex(points))
     end
-    return WEIGHTS[k]
+    return points[k]
+end
+
+function quad_weights(
+    ::Type{R},
+    k::Integer,
+) where {R<:Real}
+    weights = get_points(R, Val(:weights))
+    if !(k in eachindex(weights))
+        k = maximum(eachindex(weights))
+    end
+    return weights[k]
+end
+
+function quad_points!(
+    result::AbstractVector{R},
+    a::R,
+    b::R,
+    points::AbstractVector{R},
+) where {R<:Real}
+    result .= @. 0.5 * (a * (1 - points) + b * (points + 1))
+end
+
+function quad_points(
+    a::R,
+    b::R,
+    points::AbstractVector{R},
+) where {R<:Real}
+    result = Vector{R}(undef, length(points))
+    quad_points!(result, a, b, points)
+    return result
 end
 
 #  }}}

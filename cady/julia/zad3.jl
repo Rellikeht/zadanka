@@ -518,9 +518,9 @@ end
 function calc_points!(
     degree::Integer,
     knots::AbstractVector{<:Real},
-    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N,
+    points::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N},
     ts::AbstractVector{<:Real},
-    line::NTuple{N,Observable{<:AbstractVector{<:Real}}} where N,
+    line::NTuple{N,Observable{<:AbstractVector{<:Real}}} where {N},
 )
     @views @inbounds for dim in eachindex(line)
         calc_points!(
@@ -550,7 +550,7 @@ function calc_points!(
             line .+= points[j] * calc_point.((knots,), degree, i, ts)
             knot = i + degree
             if knot >= adjusted_end ||
-                knots[knot] != knots[knot+1]
+               knots[knot] != knots[knot+1]
                 j += 1
             end
         end
@@ -731,11 +731,14 @@ function update_plane!(
 ) where {R}
     sy, sx = size(coeffs)
     ydeg, xdeg = degree
+    fill!(temp_plane, R(0))
     @inbounds @views for x in 1:sx
         ysplines[:, x] .= calc_point.((knots[1],), ydeg, x, ts[1])
     end
     @inbounds for y in 1:sy
         xspline .= calc_point.((knots[2],), xdeg, y, ts[2])
+        xstart = findfirst(x -> x != 0, xspline)
+        xstop = findlast(x -> x != 0, xspline)
         if y == 1
             xspline[begin] = 1
         end
@@ -743,21 +746,34 @@ function update_plane!(
             if coeffs[y, x] == 0
                 continue
             end
-            transpose(temp_plane) .= xspline
             if x == 1
                 ysplines[begin, x] = 1
             end
-            # numerically unstable
-            (@view ysplines[:, x]) .*= coeffs[y, x]
-            @views temp_plane .*= ysplines[:, x]
-            (@view ysplines[:, x]) ./= coeffs[y, x]
-            # more numerically stable but slower
-            # temp_plane .*= ysplines[:, x]
-            # temp_plane .*= coeffs[y, x]
+            if x == 1 || y == 1
+                ystop = findlast(x -> x != 0, @view ysplines[:, x])
+                @views transpose(temp_plane)[begin:xstop, begin:ystop] .= xspline[begin:xstop]
+                (@view ysplines[begin:ystop, x]) .*= coeffs[y, x]
+                @views temp_plane[begin:ystop, begin:xstop] .*=
+                    ysplines[begin:ystop, x]
+                (@view ysplines[begin:ystop, x]) ./= coeffs[y, x]
+                @views plane[begin:ystop, begin:xstop] .+=
+                    temp_plane[begin:ystop, begin:xstop]
+                @views fill!(temp_plane[begin:ystop, begin:xstop], R(0))
+            else
+                ystart = findfirst(x -> x != 0, @view ysplines[:, x])
+                ystop = findlast(x -> x != 0, @view ysplines[:, x])
+                @views transpose(temp_plane)[xstart:xstop, ystart:ystop] .= xspline[xstart:xstop]
+                (@view ysplines[ystart:ystop, x]) .*= coeffs[y, x]
+                @views temp_plane[ystart:ystop, xstart:xstop] .*=
+                    ysplines[ystart:ystop, x]
+                (@view ysplines[ystart:ystop, x]) ./= coeffs[y, x]
+                @views plane[ystart:ystop, xstart:xstop] .+=
+                    temp_plane[ystart:ystop, xstart:xstop]
+                @views fill!(temp_plane[ystart:ystop, xstart:xstop], R(0))
+            end
             if x == 1
                 ysplines[begin, x] = 0
             end
-            plane .+= temp_plane
         end
         if y == 1
             xspline[begin] = 0
