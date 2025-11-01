@@ -11,6 +11,7 @@ const DEFAULT_ACCURACY = 200
 const DEFAULT_DEGREE = 2
 const DEFAULT_PLANE_ACCURACY = (DEFAULT_ACCURACY, DEFAULT_ACCURACY)
 const DEFAULT_PLANE_DEGREE = (DEFAULT_DEGREE, DEFAULT_DEGREE)
+const X, Y = 2, 1
 
 abstract type AbstractParametric end
 abstract type AbstractLine{R<:Real,N} <: AbstractParametric end
@@ -719,6 +720,41 @@ end
 
 #= calculations {{{=#
 
+function adjust_sizes!(
+    plane::AbstractMatrix{<:Real},
+    coeffs::AbstractMatrix{<:Real},
+    xspline::AbstractVector{<:Real},
+    ysplines::AbstractMatrix{<:Real},
+    temp_plane::AbstractMatrix{<:Real},
+    ts::NTuple{2,AbstractVector{<:Real}},
+    knots::NTuple{2,AbstractVector{<:Real}},
+    degree::NTuple{2,Integer},
+    accuracy::NTuple{2,Integer},
+)
+    R = typeof(plane).parameters[1]
+    sy, sx = size(coeffs)
+    resize!.(knots, (sx, sy) .+ degree .* 2)
+    get_knots!.(knots, R.((sx, sy) .+ degree .- 1), degree)
+    adjust_ts!.(ts, accuracy, knots)
+    (v -> v .+= 1).(ts)
+    (v -> v .+= 1).(knots)
+    if size(plane) != accuracy
+        plane = zeros(accuracy)
+    else
+        fill!(plane, zero(R))
+    end
+    resize!(xspline, accuracy[X])
+    for collection in [
+        ysplines,
+        temp_plane,
+        plane,
+    ]
+        if size(collection) != accuracy
+            collection = Matrix{R}(undef, accuracy)
+        end
+    end
+end
+
 function update_plane!(
     plane::AbstractMatrix{R},
     coeffs::AbstractMatrix{R},
@@ -727,16 +763,15 @@ function update_plane!(
     temp_plane::AbstractMatrix{R},
     ts::NTuple{2,AbstractVector{R}},
     knots::NTuple{2,AbstractVector{R}},
-    degree::NTuple{2,Real},
+    degree::NTuple{2,Integer},
 ) where {R}
     sy, sx = size(coeffs)
-    ydeg, xdeg = degree
     fill!(temp_plane, R(0))
     @inbounds @views for x in 1:sx
-        ysplines[:, x] .= calc_point.((knots[1],), ydeg, x, ts[1])
+        ysplines[:, x] .= calc_point.((knots[Y],), degree[Y], x, ts[Y])
     end
     @inbounds for y in 1:sy
-        xspline .= calc_point.((knots[2],), xdeg, y, ts[2])
+        xspline .= calc_point.((knots[X],), degree[X], y, ts[X])
         xstart = findfirst(x -> x != 0, xspline)
         xstop = findlast(x -> x != 0, xspline)
         if y == 1
@@ -782,30 +817,17 @@ function update_plane!(
 end
 
 function calc_points!(plane::SplinePlane)
-    R = typeof(plane).parameters[1]
-    yacc, xacc = plane.accuracy[]
-    ydeg, xdeg = plane.degree[]
-    sy, sx = size(plane.coeffs[])
-    resize!.(plane.knots, (sx, sy) .+ plane.degree[] .* 2)
-    get_knots!.(plane.knots, R.((sx, sy) .+ plane.degree[] .- 1), plane.degree[])
-    adjust_ts!.(plane.ts, plane.accuracy[], plane.knots)
-    (v -> v[] .+= 1).(plane.ts)
-    (v -> v .+= 1).(plane.knots)
-    if size(plane.plane[]) != (yacc, xacc)
-        plane.plane[] = zeros((yacc, xacc))
-    else
-        fill!(plane.plane[], zero(R))
-    end
-    resize!(plane.xspline, xacc)
-    for collection in [
-        plane.ysplines,
-        plane.temp_plane,
-        plane.plane,
-    ]
-        if size(collection[]) != (yacc, xacc)
-            collection[] = Matrix{R}(undef, (yacc, xacc))
-        end
-    end
+    adjust_sizes!(
+        plane.plane[],
+        plane.coeffs[],
+        plane.xspline,
+        plane.ysplines[],
+        plane.temp_plane[],
+        (o -> o[]).(plane.ts),
+        plane.knots,
+        plane.degree[],
+        plane.accuracy[],
+    )
     update_plane!(
         plane.plane[],
         plane.coeffs[],
@@ -814,7 +836,7 @@ function calc_points!(plane::SplinePlane)
         plane.temp_plane[],
         (o -> o[]).(plane.ts),
         plane.knots,
-        (ydeg, xdeg),
+        plane.degree[],
     )
     notify(plane.plane)
 end

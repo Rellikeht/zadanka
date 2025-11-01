@@ -11,7 +11,6 @@ using LinearAlgebra
 const SparseFactorization = SparseArrays.UMFPACK.UmfpackLU
 const DEFAULT_BITMAP_ELEMENTS = (50, 50)
 const DEFAULT_BITMAP_DEGREE = (2, 2)
-const X, Y = 2, 1
 
 GLMakie.activate!(framerate=60)
 
@@ -214,7 +213,7 @@ function solve_direction(
 )
     R = typeof(A).parameters[1]
     fact = lu(A)
-    Q, U, L, P = fact.q |> diagm, fact.U, fact.L, fact.p |> diagm
+    Q, U, L, P = diagm(fact.q), fact.U, fact.L, diagm(fact.p)
     result = zeros(R, size(F))
     for i in 1:size(F)[1]
         result[i, :] = transpose(Q) \ (U \ (L \ (P * F[i, :])))
@@ -247,26 +246,6 @@ function first_dof_on_element(
     return (findlast(x -> x == low, knot_vector) - degree) |>
            typeof(elem_number)
 end
-
-# % Finds lower and higher boundary of element
-# function [low,high]=element_boundary(knot_vector,p,elem_number)
-#   initial = knot_vector(1);
-#   kvsize = size(knot_vector,2);
-#   k = 0;
-#   low=0;
-#   high=0;
-#   for i=1:kvsize
-#     if (knot_vector(i) ~= initial)
-#       initial = knot_vector(i);
-#       k = k+1;
-#     end
-#     if (k == elem_number)
-#       low = knot_vector(i-1);
-#       high = knot_vector(i);
-#       return;
-#     end
-#   end
-# end
 
 function element_boundary(
     knots::AbstractVector{<:Real},
