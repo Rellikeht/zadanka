@@ -113,7 +113,7 @@ function bitmap_terrain(
     qcoeffsp = quad_points.(R, degree .+ 1)
     qp = Vector{R}.(undef, length.(qcoeffsp))
 
-    for D in [Y, X]
+    @inbounds @views for D in [Y, X]
         for e in 1:elements[D]
             low, high = dofs_on_element(knot_vector[D], degree[D], e)
             bounds = element_boundary(knot_vector[D], degree[D], e)
@@ -129,7 +129,7 @@ function bitmap_terrain(
         end
     end
 
-    for dim in [Y, X]
+    @inbounds @views for dim in [Y, X]
         for el in 1:elements[dim]
             xl, xh = dofs_on_element(knot_vector[dim], degree[dim], el)
             ex_bound_l, ex_bound_h = element_boundary(
@@ -150,7 +150,7 @@ function bitmap_terrain(
         end
     end
 
-    for ex in 1:elements[X]
+    @inbounds @views for ex in 1:elements[X]
         xl, xh = dofs_on_element(knot_vector[X], degree[X], ex)
         ex_bound_l, ex_bound_h = element_boundary(
             knot_vector[X],
@@ -173,7 +173,7 @@ function bitmap_terrain(
                         for iqy in eachindex(qp[Y])
                             fun = splines[X][iqx, bk, ex] *
                                   splines[X][iqy, bl, ey]
-                            ids = res.(size(bitmap), (a -> a[begin]).((qp[X][iqy], qp[Y][iqx])))
+                            ids = res.(size(bitmap), (a -> a[begin]).((qp[X][iqx], qp[Y][iqy])))
                             F[bl, bk] += fun * qw[X][iqx] * qw[Y][iqy] * J * bitmap[ids...]
                         end
                     end
@@ -182,10 +182,8 @@ function bitmap_terrain(
         end
     end
 
-    F = solve_direction(A[X], F)
-    F = transpose(F)
-    F = solve_direction(A[Y], F)
-    F = transpose(F)
+    solve_direction!(F, A[X], F)
+    solve_direction!(transpose(F), A[Y], transpose(F))
     if ns == prec
         result = deepcopy(F)
     else
@@ -207,17 +205,39 @@ end
 
 # helpers {{{
 
+function solve_direction!(
+    out::AbstractMatrix,
+    A::AbstractSparseMatrix,
+    F::AbstractMatrix,
+)
+    fact = lu(A)
+    return solve_direction!(out, fact, A, F)
+end
+
+function solve_direction!(
+    out::AbstractMatrix,
+    fact::Union{Factorization,SparseFactorization},
+    A::AbstractSparseMatrix,
+    F::AbstractMatrix,
+)
+    R = typeof(A).parameters[1]
+    row_in = Vector{R}(undef, size(F, 2))
+    row_out = Vector{R}(undef, size(out, 2))
+    @views @inbounds for i in 1:size(F)[1]
+        row_in .= F[i, :]
+        ldiv!(row_out, fact, row_in)
+        out[i, :] .= row_out
+    end
+end
+
 function solve_direction(
     A::AbstractSparseMatrix,
     F::AbstractMatrix,
 )
     R = typeof(A).parameters[1]
     fact = lu(A)
-    Q, U, L, P = diagm(fact.q), fact.U, fact.L, diagm(fact.p)
-    result = zeros(R, size(F))
-    for i in 1:size(F)[1]
-        result[i, :] = transpose(Q) \ (U \ (L \ (P * F[i, :])))
-    end
+    result = Matrix{R}(undef, size(F))
+    solve_direction!(result, fact, A, F)
     return result
 end
 
