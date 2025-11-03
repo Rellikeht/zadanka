@@ -49,6 +49,10 @@ function Base.abs(color::AbstractRGB)
     sqrt(sum((color.r, color.g, color.b) .^ 2))
 end
 
+function Base.abs(color::AbstractRGBA)
+    sqrt(sum((color.r, color.g, color.b) .^ 2)) .* color.alpha
+end
+
 function get_value(o::Observable)
     return o[]
 end
@@ -772,40 +776,33 @@ function update_plane!(
     end
     @inbounds for y in 1:sy
         xspline .= calc_point.((knots[X],), degree[X], y, ts[X])
-        xstart = findfirst(x -> x != 0, xspline)
         xstop = findlast(x -> x != 0, xspline)
         if y == 1
             xspline[begin] = 1
+            xstart = firstindex(ysplines[y, :])
+        else
+            xstart = findfirst(x -> x != 0, xspline)
         end
+
         for x in 1:sx
             if coeffs[y, x] == 0
                 continue
             end
             if x == 1
                 ysplines[begin, x] = 1
-            end
-            if x == 1 || y == 1
-                ystop = findlast(x -> x != 0, @view ysplines[:, x])
-                @views transpose(temp_plane)[begin:xstop, begin:ystop] .= xspline[begin:xstop]
-                (@view ysplines[begin:ystop, x]) .*= coeffs[y, x]
-                @views temp_plane[begin:ystop, begin:xstop] .*=
-                    ysplines[begin:ystop, x]
-                (@view ysplines[begin:ystop, x]) ./= coeffs[y, x]
-                @views plane[begin:ystop, begin:xstop] .+=
-                    temp_plane[begin:ystop, begin:xstop]
-                @views fill!(temp_plane[begin:ystop, begin:xstop], R(0))
+                ystart = firstindex(ysplines[:, x])
             else
                 ystart = findfirst(x -> x != 0, @view ysplines[:, x])
-                ystop = findlast(x -> x != 0, @view ysplines[:, x])
-                @views transpose(temp_plane)[xstart:xstop, ystart:ystop] .= xspline[xstart:xstop]
-                (@view ysplines[ystart:ystop, x]) .*= coeffs[y, x]
-                @views temp_plane[ystart:ystop, xstart:xstop] .*=
-                    ysplines[ystart:ystop, x]
-                (@view ysplines[ystart:ystop, x]) ./= coeffs[y, x]
-                @views plane[ystart:ystop, xstart:xstop] .+=
-                    temp_plane[ystart:ystop, xstart:xstop]
-                @views fill!(temp_plane[ystart:ystop, xstart:xstop], R(0))
             end
+            ystop = findlast(x -> x != 0, @view ysplines[:, x])
+            @views transpose(temp_plane)[xstart:xstop, ystart:ystop] .= xspline[xstart:xstop]
+            (@view ysplines[ystart:ystop, x]) .*= coeffs[y, x]
+            @views temp_plane[ystart:ystop, xstart:xstop] .*=
+                ysplines[ystart:ystop, x]
+            (@view ysplines[ystart:ystop, x]) ./= coeffs[y, x]
+            @views plane[ystart:ystop, xstart:xstop] .+=
+                temp_plane[ystart:ystop, xstart:xstop]
+            @views fill!(temp_plane[ystart:ystop, xstart:xstop], R(0))
             if x == 1
                 ysplines[begin, x] = 0
             end
@@ -861,10 +858,6 @@ struct Demo
     plot::AbstractPlot
     scatter::Union{Scatter,Nothing}
     moving::Observable{Union{Int,Nothing}}
-end
-
-function Makie.display(demo::Demo)
-    display(demo.fig)
 end
 
 #= constructors {{{=#
@@ -1328,3 +1321,60 @@ end
 #= }}}=#
 
 #= }}}=#
+
+# makie helpers {{{
+
+function Makie.display(demo::Demo)
+    display(demo.fig)
+end
+
+function calc_static_limits(
+    finallimits::Any # geometry basics, too lazy to add here
+)
+    return calc_static_limits(
+        finallimits.origin,
+        finallimits.widths,
+    )
+end
+
+function calc_static_limits(
+    origin::Union{Vec{N,<:Real},NTuple{N,Real}},
+    widths::Union{Vec{N,<:Real},NTuple{N,Real}},
+) where {N}
+    return tuple((
+        (origin[i], origin[i]) .+ (0, widths[i])
+        for i in 1:N
+    )...)
+end
+
+function set_limits!(
+    ax::AbstractAxis,
+    type::Symbol=:current,
+    origin::Union{Nothing,NTuple{N,Real} where {N}}=nothing,
+    widths::Union{Nothing,NTuple{N,Real} where {N}}=nothing,
+)
+    if type === :auto
+        ax.limits[] = (nothing, nothing, nothing)
+    elseif type === :current
+        ax.limits[] = calc_static_limits(ax.finallimits[])
+    elseif type === :toggle
+        if ax.limits[] == (nothing, nothing, nothing)
+            set_limits!(ax, :auto)
+        else
+            set_limits!(ax, :current)
+        end
+    elseif type === :from_point
+        ax.limits[] = calc_static_limits(origin, widths)
+    elseif type === :from_limits
+        ax.limits[] = (
+            origin[1],
+            widths[1],
+            origin[2],
+            widths[2],
+            origin[3],
+            widths[3],
+        )
+    end
+end
+
+#  }}}
