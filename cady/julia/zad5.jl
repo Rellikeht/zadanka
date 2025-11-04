@@ -30,14 +30,7 @@ function bitmap_terrain(
     degree::NTuple{2,Integer}=DEFAULT_BITMAP_DEGREE,
 )
     R = typeof(bitmap).parameters[1]
-    knot_vector = tuple((
-        [
-            zeros(R, degree[dim]);
-            [R(i) for i in 0:elements[dim]];
-            fill(R(elements[dim]), degree[dim])
-        ] ./ elements[dim]
-        for dim in [Y, X]
-    )...)
+    knot_vector = get_knots.((e -> (R(0):R(e)) ./ R(e)).(elements), degree)
     ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
     A = (s -> sparse(R, I, s, s)).(ns)
     F = zeros(ns)
@@ -59,14 +52,7 @@ function bitmap_terrain(
     degree::NTuple{2,Integer}=DEFAULT_BITMAP_DEGREE,
 )
     R = Float64
-    knot_vector = tuple((
-        [
-            zeros(R, degree[dim]);
-            [R(i) for i in 0:elements[dim]];
-            fill(R(elements[dim]), degree[dim])
-        ] ./ elements[dim]
-        for dim in [Y, X]
-    )...)
+    knot_vector = get_knots.((e -> (R(0):R(e)) ./ R(e)).(elements), degree)
     ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
     F = zeros(ns)
     splines = zeros.(degree .+ 1, ns, elements .+ 1)
@@ -107,17 +93,20 @@ function bitmap_terrain(
     splines::NTuple{2,AbstractArray{<:Real}},
 )
     R = typeof(bitmap).parameters[1]
-    prec = @. 2 * (elements + degree) + 1
+    # wtf that does besides 
+    # prec = @. 2 * (elements + degree) + 1
+    precision = elements .+ degree
     ns = ((ks, d) -> length(ks) - d - 1).(knot_vector, degree)
     qw = quad_weights.(R, degree .+ 1)
     qcoeffsp = quad_points.(R, degree .+ 1)
     qp = Vector{R}.(undef, length.(qcoeffsp))
+    bounds = Vector{NTuple{2,R}}.(undef, elements)
 
     @inbounds @views for D in [Y, X]
         for e in 1:elements[D]
             low, high = dofs_on_element(knot_vector[D], degree[D], e)
-            bounds = element_boundary(knot_vector[D], degree[D], e)
-            quad_points!(qp[D], bounds..., qcoeffsp[D])
+            bounds[D][e] = element_boundary(knot_vector[D], degree[D], e)
+            quad_points!(qp[D], bounds[D][e]..., qcoeffsp[D])
             for bi in low:high
                 splines[D][:, bi, e] = calc_point.(
                     (knot_vector[D],),
@@ -132,16 +121,12 @@ function bitmap_terrain(
     @inbounds @views for dim in [Y, X]
         for el in 1:elements[dim]
             xl, xh = dofs_on_element(knot_vector[dim], degree[dim], el)
-            ex_bound_l, ex_bound_h = element_boundary(
-                knot_vector[dim],
-                degree[dim],
-                el,
-            )
+            ex_bound_l, ex_bound_h = bounds[dim][el]
             J = ex_bound_h - ex_bound_l
             for bi in xl:xh
                 for bk in xl:xh
                     for iq in 1:length(qw)
-                        A[dim][bk, bi] += qw[dim][iq] * J *
+                        A[dim][bk, bi] += J * qw[dim][iq] *
                                           splines[dim][iq, bi, el] *
                                           splines[dim][iq, bk, el]
                     end
@@ -152,19 +137,11 @@ function bitmap_terrain(
 
     @inbounds @views for ex in 1:elements[X]
         xl, xh = dofs_on_element(knot_vector[X], degree[X], ex)
-        ex_bound_l, ex_bound_h = element_boundary(
-            knot_vector[X],
-            degree[X],
-            ex,
-        )
+        ex_bound_l, ex_bound_h = bounds[X][ex]
         quad_points!(qp[X], ex_bound_l, ex_bound_h, qcoeffsp[X])
         for ey in 1:elements[Y]
             yl, yh = dofs_on_element(knot_vector[Y], degree[Y], ey)
-            ey_bound_l, ey_bound_h = element_boundary(
-                knot_vector[Y],
-                degree[Y],
-                ey,
-            )
+            ey_bound_l, ey_bound_h = bounds[Y][ey]
             quad_points!(qp[Y], ey_bound_l, ey_bound_h, qcoeffsp[Y])
             J = (ex_bound_h - ex_bound_l) * (ey_bound_h - ey_bound_l)
             for bk in xl:xh
@@ -184,20 +161,22 @@ function bitmap_terrain(
 
     solve_direction!(F, A[X], F)
     solve_direction!(transpose(F), A[Y], transpose(F))
-    if ns == prec
-        result = deepcopy(F)
+    if ns == precision
+        result = F
     else
-        result = Matrix{R}(undef, prec)
-        for i in 1:size(result)[X]
+        result = Matrix{R}(undef, precision)
+        # TODO does this work?
+        @views for i in 1:size(result)[X]
             for j in 1:size(result)[Y]
-                i1 = ((j, i) .- 1) ./ floor.(prec ./ ns)
+                i1 = ((j, i) .- 1) ./ floor.(precision ./ ns)
                 i1 = Int.(floor.(i1) .+ 1)
                 i1 = (((a, b) -> minimum((a, b)))).(i1, ns)
                 result[j, i] = F[i1...]
             end
         end
     end
-    result .*= 255
+    # TODO why is height lost
+    result .*= maximum(bitmap) / maximum(result)
     return result
 end
 
@@ -356,42 +335,6 @@ function quad_points(
     result = Vector{R}(undef, length(points))
     quad_points!(result, a, b, points)
     return result
-end
-
-#  }}}
-
-# colors {{{
-
-function gray(color...)
-    return my_gray(color...)
-end
-
-function my_gray(color::AbstractRGB)
-    return abs(color) / sqrt(3.0)
-end
-
-function my_gray(color::NTuple{3,Real})
-    return sqrt(sum(color .^ 2)) / sqrt(3.0)
-end
-
-function my_gray(color::Real...)
-    my_gray(color)
-end
-
-function orig_gray(color::AbstractRGB)
-    return typeof(color)(
-        1.0 - 0.3 * color.r - 0.59 * color.g - 0.11 * color.b
-    )
-end
-
-function orig_gray(color::NTuple{3,Real})
-    return typeof(color)(
-        1.0 - 0.3 * color[1] - 0.59 * color[2] - 0.11 * color[3]
-    )
-end
-
-function orig_gray(color::Real...)
-    orig_gray(color)
 end
 
 #  }}}
