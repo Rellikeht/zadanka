@@ -45,12 +45,16 @@ function tuple_of_vectors(
     return new_data
 end
 
+function Base.abs(color::@NamedTuple{r::R, g::R, b::R} where {R<:Real})
+    return 0.3 * color.r + 0.59 * color.g + 0.11 * color.b
+end
+
 function Base.abs(color::AbstractRGB)
-    sqrt(sum((color.r, color.g, color.b) .^ 2))
+    return abs((r=color.r, g=color.g, b=color.b))
 end
 
 function Base.abs(color::AbstractRGBA)
-    sqrt(sum((color.r, color.g, color.b) .^ 2)) .* color.alpha
+    return abs((r=color.r, g=color.g, b=color.b)) * color.alpha
 end
 
 function get_value(o::Observable)
@@ -678,8 +682,6 @@ struct SplinePlane{R<:Real} <: AbstractPlane{R}
     xspline::AbstractVector{R}
     "temporary splines in y"
     ysplines::Ref{<:AbstractMatrix{R}}
-    "temporary array for plane"
-    temp_plane::Ref{<:AbstractMatrix{R}}
     "calculated plane"
     plane::Observable{<:AbstractMatrix{R}}
 end
@@ -703,7 +705,6 @@ function SplinePlane(
         tuple((Vector{R}(undef, 0) for _ in 1:2)...),
         tuple((Observable(Vector{R}(undef, 0)) for _ in 1:2)...),
         Vector{R}(undef, accuracy[2]),
-        Ref(Matrix{R}(undef, accuracy)),
         Ref(Matrix{R}(undef, accuracy)),
         Observable(Matrix{R}(undef, accuracy)),
     )
@@ -729,7 +730,6 @@ function adjust_sizes!(
     coeffs::AbstractMatrix{<:Real},
     xspline::AbstractVector{<:Real},
     ysplines::AbstractMatrix{<:Real},
-    temp_plane::AbstractMatrix{<:Real},
     ts::NTuple{2,AbstractVector{<:Real}},
     knots::NTuple{2,AbstractVector{<:Real}},
     degree::NTuple{2,Integer},
@@ -750,7 +750,6 @@ function adjust_sizes!(
     resize!(xspline, accuracy[X])
     for collection in [
         ysplines,
-        temp_plane,
         plane,
     ]
         if size(collection) != accuracy
@@ -764,13 +763,11 @@ function update_plane!(
     coeffs::AbstractMatrix{R},
     xspline::AbstractVector{R},
     ysplines::AbstractMatrix{R},
-    temp_plane::AbstractMatrix{R},
     ts::NTuple{2,AbstractVector{R}},
     knots::NTuple{2,AbstractVector{R}},
     degree::NTuple{2,Integer},
 ) where {R}
     sy, sx = size(coeffs)
-    fill!(temp_plane, R(0))
     @inbounds @views for x in 1:sx
         ysplines[:, x] .= calc_point.((knots[Y],), degree[Y], x, ts[Y])
     end
@@ -795,14 +792,10 @@ function update_plane!(
                 ystart = findfirst(x -> x != 0, @view ysplines[:, x])
             end
             ystop = findlast(x -> x != 0, @view ysplines[:, x])
-            @views transpose(temp_plane)[xstart:xstop, ystart:ystop] .= xspline[xstart:xstop]
             (@view ysplines[ystart:ystop, x]) .*= coeffs[y, x]
-            @views temp_plane[ystart:ystop, xstart:xstop] .*=
-                ysplines[ystart:ystop, x]
-            (@view ysplines[ystart:ystop, x]) ./= coeffs[y, x]
             @views plane[ystart:ystop, xstart:xstop] .+=
-                temp_plane[ystart:ystop, xstart:xstop]
-            @views fill!(temp_plane[ystart:ystop, xstart:xstop], R(0))
+                ysplines[ystart:ystop, x] .* transpose(xspline[xstart:xstop])
+            (@view ysplines[ystart:ystop, x]) ./= coeffs[y, x]
             if x == 1
                 ysplines[begin, x] = 0
             end
@@ -819,7 +812,6 @@ function calc_points!(plane::SplinePlane)
         plane.coeffs[],
         plane.xspline,
         plane.ysplines[],
-        plane.temp_plane[],
         (o -> o[]).(plane.ts),
         plane.knots,
         plane.degree[],
@@ -830,7 +822,6 @@ function calc_points!(plane::SplinePlane)
         plane.coeffs[],
         plane.xspline,
         plane.ysplines[],
-        plane.temp_plane[],
         (o -> o[]).(plane.ts),
         plane.knots,
         plane.degree[],
